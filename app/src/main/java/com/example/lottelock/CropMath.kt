@@ -5,8 +5,8 @@ import kotlin.math.roundToInt
 
 /** 앱 화면 스코어보드 카드 배경 규격 */
 object BackgroundSpec {
-    /** 가로 : 세로 = 2 : 1 (카드와 자르기 틀이 같은 비율) */
-    const val RATIO = 2f
+    /** 가로 : 세로 = 3 : 2 (전광판 카드와 자르기 틀이 같은 비율) */
+    const val RATIO = 1.5f
     /** 저장할 배경 이미지 최대 폭(px) */
     const val OUTPUT_WIDTH = 1440
 }

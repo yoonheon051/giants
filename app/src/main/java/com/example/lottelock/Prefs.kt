@@ -40,6 +40,21 @@ class Prefs(context: Context) {
         get() = sp.getString("live_game_v2", "").orEmpty()
         set(v) = sp.edit { putString("live_game_v2", v) }
 
+    /** 오늘 열릴 예정인 경기 composite JSON ("" = 없음). 앱 전광판에 '경기 전'으로 표시 */
+    var upcomingGame: String
+        get() = sp.getString("upcoming_game", "").orEmpty()
+        set(v) = sp.edit { putString("upcoming_game", v) }
+
+    /** 알림에 스코어보드 표시 (앱 화면의 스위치). 끄면 알림과 실시간 갱신을 하지 않음 */
+    var notificationsOn: Boolean
+        get() = sp.getBoolean("notifications_on", true)
+        set(v) = sp.edit { putBoolean("notifications_on", v) }
+
+    /** 마지막으로 결과를 불러온 시각 (epoch ms, 0 = 없음) */
+    var lastRefreshAt: Long
+        get() = sp.getLong("last_refresh_at", 0L)
+        set(v) = sp.edit { putLong("last_refresh_at", v) }
+
     /** 마지막으로 띄운 알림 내용의 서명. 같으면 알림을 다시 올리지 않음 */
     var lastNotifiedSignature: String
         get() = sp.getString("last_notified_sig", "").orEmpty()

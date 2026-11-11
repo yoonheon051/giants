@@ -137,6 +137,7 @@ class LiveScoreService : Service() {
             }
             GameState.FINISHED -> {
                 prefs.liveGame = composite.toString()
+                if (!demo) prefs.upcomingGame = ""   // 오늘 예정 경기가 끝났으므로
                 if (demo) {
                     ScoreNotifier.update(this, force = false, note = "데모 · 1분 뒤 원래대로")
                     delay(60_000L)   // 데모: 최종 스코어를 잠깐 보여준 뒤 실제 최근 경기로

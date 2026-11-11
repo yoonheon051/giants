@@ -156,6 +156,7 @@ object ScoreNotifier {
     @SuppressLint("MissingPermission")   // canNotify()로 확인
     fun update(context: Context, force: Boolean, note: String? = null): Boolean {
         val prefs = Prefs(context)
+        if (!prefs.notificationsOn) return false   // 앱 화면에서 알림 표시를 끔
         val game = ScoreUpdater.currentGame(context) ?: return false
         if (!canNotify(context)) return false
         val sig = listOf(

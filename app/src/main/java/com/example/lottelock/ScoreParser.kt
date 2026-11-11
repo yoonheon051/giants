@@ -28,6 +28,7 @@ data class GameResult(
     val state: GameState,
     val statusInfo: String,    // 네이버가 주는 진행 상황 (예: "7회말")
     val stadium: String?,      // 구장 (기록을 받았을 때만)
+    val category: String,      // 네이버 리그 분류 (예: "kbo", "apbc")
     val away: TeamLine,
     val home: TeamLine,
     val trackedIsHome: Boolean,
@@ -75,12 +76,16 @@ object ScoreParser {
         return Schedule(games, result.optInt("gameTotalCount", games.size))
     }
 
-    /** 경기 기록 응답 → {"scoreBoard": .., "stadium": ..}. 기록이 없으면 null */
+    /**
+     * 경기 기록 응답 → {"scoreBoard": .. | null, "stadium": ..}. 기록 자체가 없으면 null.
+     * 경기 전에는 점수판 없이 구장만 있을 수 있다.
+     */
     fun parseRecord(body: String): JSONObject? {
         val data = JSONObject(body).optJSONObject("result")?.optJSONObject("recordData") ?: return null
-        val scoreBoard = data.optJSONObject("scoreBoard") ?: return null
+        val scoreBoard = data.optJSONObject("scoreBoard")
         val stadium = data.optJSONObject("gameInfo")?.optString("stadium").orEmpty()
-        return JSONObject().put("scoreBoard", scoreBoard).put("stadium", stadium)
+        if (scoreBoard == null && stadium.isBlank()) return null
+        return JSONObject().put("scoreBoard", scoreBoard ?: JSONObject.NULL).put("stadium", stadium)
     }
 
     fun compose(game: JSONObject, record: JSONObject?): JSONObject =
@@ -143,6 +148,7 @@ object ScoreParser {
             state = stateOf(g),
             statusInfo = g.optString("statusInfo"),
             stadium = record?.optString("stadium")?.takeIf { it.isNotBlank() },
+            category = g.optString("categoryId"),
             away = away,
             home = home,
             trackedIsHome = home.code.equals(team.trim(), true) || home.name.equals(team.trim(), true),

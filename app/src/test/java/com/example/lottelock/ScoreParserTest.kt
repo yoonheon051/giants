@@ -180,4 +180,18 @@ class ScoreParserTest {
         assertEquals("일본", g.opponent.shortName)
         assertTrue(g.scoreLine.startsWith("일본 "))      // 데모는 추적 팀이 홈 → 상대가 앞
     }
+
+    @Test fun pregameRecordKeepsStadiumAndCategory() {
+        // 경기 전: 점수판 없이 구장만 있는 기록
+        val rec = ScoreParser.parseRecord("""{"code":200,"success":true,"result":{"recordData":{"gameInfo":{"stadium":"도쿄돔"}}}}""")!!
+        val raw = JSONObject("""{"gameId":"88881112AUKR02026","categoryId":"apbc","gameDateTime":"2026-11-12T12:00:00","homeTeamCode":"KR","homeTeamName":"대한민국","homeTeamScore":0,"awayTeamCode":"AU","awayTeamName":"호주","awayTeamScore":0,"statusCode":"BEFORE","statusInfo":"경기전","cancel":false,"suspended":false}""")
+        val g = ScoreParser.parseComposite(ScoreParser.compose(raw, rec), "KR")!!
+        assertEquals(GameState.SCHEDULED, g.state)
+        assertEquals("도쿄돔", g.stadium)
+        assertEquals("apbc", g.category)
+        assertEquals(List(9) { null }, g.home.innings)
+        assertEquals("호주 0 : 0 대한민국", g.scoreLine)
+        // 기록이 아예 없으면 null
+        assertNull(ScoreParser.parseRecord("""{"code":200,"success":true,"result":{}}"""))
+    }
 }

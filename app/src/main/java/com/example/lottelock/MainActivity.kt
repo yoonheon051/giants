@@ -1,22 +1,23 @@
 package com.example.lottelock
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.widget.Button
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.RadioGroup
+import android.widget.PopupMenu
+import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,28 +29,37 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * 메인 화면 (디자인 시안 "B + C").
+ * 위: 제목 + 응원 팀 선택 / 가운데: 전광판 / 아래: 결과 불러오기, 설정 목록, 실시간 갱신 중지.
+ * 데모 경기는 화면에서 뺐고, 제목 "스코어보드"를 길게 누르면 실행된다(테스트용).
+ */
 class MainActivity : ComponentActivity() {
 
     private lateinit var prefs: Prefs
-    private lateinit var previewTitle: TextView
-    private lateinit var previewSummary: TextView
-    private lateinit var previewLineScore: FrameLayout
-    private lateinit var previewCard: FrameLayout
-    private lateinit var previewBg: ImageView
-    private lateinit var previewScrim: View
-    private lateinit var status: TextView
+    private lateinit var board: ScoreboardBinder
+    private lateinit var boardBg: ImageView
+    private lateinit var boardScrim: View
+    private lateinit var teamChip: TextView
+    private lateinit var notifSwitch: Switch
+    private lateinit var bgValue: TextView
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) showNotification()
-            else setStatus("알림 권한이 없어 스코어보드를 표시할 수 없습니다. '알림 설정 열기'에서 허용해 주세요.")
+            if (granted) {
+                turnNotificationsOn()
+            } else {
+                setSwitchSilently(false)
+                prefs.notificationsOn = false
+                toast("알림 권한이 없어 스코어보드를 표시할 수 없습니다. '휴대폰 알림 설정'에서 허용해 주세요.")
+            }
         }
 
-    /** 자르기 화면 → 완료하면 2:1로 잘린 사진이 저장돼 있음 */
+    /** 자르기 화면 → 완료하면 잘린 사진이 저장돼 있음 */
     private val cropBackground =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
-                setStatus("배경 이미지를 바꿨습니다.")
+                toast("배경 이미지를 바꿨습니다.")
                 applyBackground()
             }
         }
@@ -61,7 +71,7 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 val file = withContext(Dispatchers.IO) { runCatching { prepareCropSource(uri) }.getOrNull() }
                 if (file == null) {
-                    setStatus("이미지를 불러오지 못했습니다.")
+                    toast("이미지를 불러오지 못했습니다.")
                 } else {
                     cropBackground.launch(
                         Intent(this@MainActivity, CropActivity::class.java).putExtra(CropActivity.EXTRA_PATH, file.path)
@@ -76,58 +86,84 @@ class MainActivity : ComponentActivity() {
         prefs = Prefs(this)
         ScoreNotifier.ensureChannel(this)
 
-        previewTitle = findViewById(R.id.previewTitle)
-        previewSummary = findViewById(R.id.previewSummary)
-        previewLineScore = findViewById(R.id.previewLineScore)
-        previewCard = findViewById<FrameLayout>(R.id.previewCard).apply { clipToOutline = true }   // 둥근 모서리로 사진 자르기
-        previewBg = findViewById(R.id.previewBg)
-        previewScrim = findViewById(R.id.previewScrim)
+        board = ScoreboardBinder(findViewById(R.id.boardCard))
+        findViewById<FrameLayout>(R.id.boardCard).clipToOutline = true   // 둥근 모서리로 배경 사진 자르기
+        boardBg = findViewById(R.id.boardBg)
+        boardScrim = findViewById(R.id.boardScrim)
+        teamChip = findViewById(R.id.teamChip)
+        notifSwitch = findViewById(R.id.notifSwitch)
+        bgValue = findViewById(R.id.bgValue)
 
-        findViewById<Button>(R.id.btnPickBg).setOnClickListener {
-            pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }
-        findViewById<Button>(R.id.btnClearBg).setOnClickListener {
-            prefs.appBackgroundFile.delete()
-            applyBackground()
-            setStatus("기본 배경으로 되돌렸습니다.")
-        }
-        status = findViewById(R.id.status)
-        findViewById<RadioGroup>(R.id.teamToggle).apply {
-            check(if (prefs.team == TeamChoice.KOREA) R.id.teamKorea else R.id.teamLotte)
-            setOnCheckedChangeListener { _, checkedId ->
-                selectTeam(if (checkedId == R.id.teamKorea) TeamChoice.KOREA else TeamChoice.LOTTE)
+        // 응원 팀 선택
+        teamChip.setOnClickListener { showTeamMenu() }
+
+        // 숨은 기능: 제목을 길게 누르면 데모 경기 (테스트용)
+        findViewById<TextView>(R.id.appTitle).setOnLongClickListener {
+            if (hasNotificationPermission()) {
+                LiveController.startNow(this, demo = true)
+                toast("데모 경기 시작: 20초마다 반 이닝씩 진행됩니다.")
+            } else {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+            true
         }
 
-        findViewById<Button>(R.id.btnRefresh).setOnClickListener { refresh() }
-        findViewById<Button>(R.id.btnShow).setOnClickListener { ensurePermissionThenShow() }
-        findViewById<Button>(R.id.btnNotifSettings).setOnClickListener {
+        findViewById<View>(R.id.btnRefresh).setOnClickListener { refresh() }
+
+        // 알림에 스코어보드 표시
+        setSwitchSilently(prefs.notificationsOn && hasNotificationPermission())
+        notifSwitch.setOnCheckedChangeListener { _, on -> if (on) ensurePermissionThenTurnOn() else turnNotificationsOff() }
+
+        findViewById<View>(R.id.rowBackground).setOnClickListener { showBackgroundMenu() }
+        findViewById<View>(R.id.rowNotifSettings).setOnClickListener {
             startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
         }
-        findViewById<Button>(R.id.btnDemo).setOnClickListener {
-            if (!hasNotificationPermission()) { ensurePermissionThenShow(); return@setOnClickListener }
-            LiveController.startNow(this, demo = true)
-            setStatus("데모 경기 시작: 20초마다 반 이닝씩 진행됩니다. 알림창과 잠금화면에서 확인해 보세요.")
-        }
-        findViewById<Button>(R.id.btnStopLive).setOnClickListener {
+        findViewById<View>(R.id.btnStopLive).setOnClickListener {
             LiveController.stop(this)
-            setStatus("실시간 갱신을 멈췄습니다.")
+            toast("실시간 갱신을 멈췄습니다.")
         }
 
-        setStatus(prefs.lastStatus.ifBlank { "'결과 불러오기'를 누르세요." })
         UpdateWorker.schedule(this)
+        bindTeamChip()
         applyBackground()
 
-        // 화면이 보이는 동안 5초마다 상태와 미리보기 갱신 (실시간 갱신·데모 진행 확인용)
+        // 화면이 보이는 동안 5초마다 전광판 갱신 (실시간 갱신·데모 진행 반영)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
+                    bindBoard()
                     delay(5_000)
-                    if (prefs.lastStatus.isNotBlank()) setStatus(prefs.lastStatus)
-                    updatePreview()
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 휴대폰 설정에서 알림 권한을 바꾸고 돌아온 경우 반영
+        if (notifSwitch.isChecked && !hasNotificationPermission()) setSwitchSilently(false)
+    }
+
+    // ── 응원 팀
+
+    private fun showTeamMenu() {
+        PopupMenu(this, teamChip).apply {
+            menu.add(0, 0, 0, teamName(TeamChoice.LOTTE))
+            menu.add(0, 1, 1, teamName(TeamChoice.KOREA))
+            setOnMenuItemClickListener { item ->
+                selectTeam(if (item.itemId == 1) TeamChoice.KOREA else TeamChoice.LOTTE)
+                true
+            }
+        }.show()
+    }
+
+    private fun teamName(team: TeamChoice) = when (team) {
+        TeamChoice.LOTTE -> "롯데 자이언츠"
+        TeamChoice.KOREA -> "국가대표"
+    }
+
+    private fun bindTeamChip() {
+        teamChip.text = teamName(prefs.team)
     }
 
     /** 팀을 바꾸면 예전 팀 결과·실시간 갱신을 정리하고 새 팀 결과를 바로 불러온다 */
@@ -137,78 +173,102 @@ class MainActivity : ComponentActivity() {
         prefs.team = choice
         prefs.cachedGames = "[]"
         prefs.liveGame = ""
+        prefs.upcomingGame = ""
         prefs.lastNotifiedSignature = ""
-        updatePreview()
+        bindTeamChip()
+        bindBoard()
         refresh()
     }
 
+    // ── 결과 불러오기
+
     private fun refresh() {
-        setStatus("불러오는 중…")
+        toast("불러오는 중…")
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { ScoreUpdater.refresh(this@MainActivity) } }
             result.onSuccess { msg ->
-                setStatus("$msg (오늘 요청 ${prefs.requestsToday}회)")
+                toast(msg)
                 UpdateWorker.schedule(this@MainActivity)
-                if (hasNotificationPermission() && !LiveScoreService.running) ScoreNotifier.update(this@MainActivity, force = true)
-            }.onFailure { setStatus("실패: ${it.message}") }
-            updatePreview()
+                if (prefs.notificationsOn && hasNotificationPermission() && !LiveScoreService.running) {
+                    ScoreNotifier.update(this@MainActivity, force = true)
+                }
+            }.onFailure { toast("불러오지 못했습니다: ${it.message}") }
+            bindBoard()
         }
     }
+
+    private fun bindBoard() {
+        val game = runCatching { ScoreUpdater.currentGame(this, includeUpcoming = true) }.getOrNull()
+        board.bind(game, prefs.team, prefs.notificationsOn, prefs.lastRefreshAt)
+    }
+
+    // ── 알림 표시 스위치
 
     private fun hasNotificationPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    private fun ensurePermissionThenShow() {
-        if (hasNotificationPermission()) showNotification()
+    private fun ensurePermissionThenTurnOn() {
+        if (hasNotificationPermission()) turnNotificationsOn()
         else requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    private fun showNotification() {
+    private fun turnNotificationsOn() {
+        prefs.notificationsOn = true
+        setSwitchSilently(true)
         if (!ScoreNotifier.canNotify(this)) {
-            setStatus("이 앱의 알림이 꺼져 있습니다. '알림 설정 열기'에서 켜 주세요."); return
-        }
-        val shown = ScoreNotifier.update(this, force = true)
-        setStatus(
-            if (shown) "알림에 스코어보드를 띄웠습니다. 잠금화면에 점수가 안 보이면 휴대폰 설정 → 잠금화면 → 알림에서 '내용 표시'로 바꿔 주세요."
-            else "먼저 '결과 불러오기'를 누르세요."
-        )
-        if (shown) UpdateWorker.schedule(this)
-    }
-
-    /** 알림과 같은 레이아웃(RemoteViews)을 그대로 앱 화면에 그려서 미리보기 */
-    private fun updatePreview() {
-        val game = runCatching { ScoreUpdater.currentGame(this) }.getOrNull()
-        previewLineScore.removeAllViews()
-        if (game == null) {
-            previewTitle.text = "스코어보드"
-            previewSummary.text = "아직 불러온 경기가 없습니다"
+            toast("이 앱의 알림이 꺼져 있습니다. '휴대폰 알림 설정'에서 켜 주세요.")
             return
         }
-        val note = if (LiveScoreService.demoRunning) "데모" else null
-        previewTitle.text = ScoreNotifier.title(game)
-        previewSummary.text = ScoreNotifier.summary(game, note)
-        val rv = ScoreNotifier.lineScoreView(this, game, note, onImage = hasBackground(), showHeader = false)
-        previewLineScore.addView(rv.apply(this, previewLineScore))
+        prefs.lastNotifiedSignature = ""
+        if (!ScoreNotifier.update(this, force = true)) toast("먼저 '결과 불러오기'를 누르세요.")
+        bindBoard()
+    }
+
+    private fun turnNotificationsOff() {
+        prefs.notificationsOn = false
+        if (LiveScoreService.running) LiveController.stop(this)
+        ScoreNotifier.cancel(this)
+        bindBoard()
+    }
+
+    /** 리스너를 거치지 않고 스위치 상태만 바꿈 */
+    private fun setSwitchSilently(on: Boolean) {
+        if (!::notifSwitch.isInitialized) return
+        notifSwitch.setOnCheckedChangeListener(null)
+        notifSwitch.isChecked = on
+        notifSwitch.setOnCheckedChangeListener { _, checked -> if (checked) ensurePermissionThenTurnOn() else turnNotificationsOff() }
+    }
+
+    // ── 전광판 배경
+
+    private fun showBackgroundMenu() {
+        val items = if (hasBackground()) arrayOf("사진 선택", "기본 배경으로") else arrayOf("사진 선택")
+        AlertDialog.Builder(this)
+            .setTitle("스코어보드 배경")
+            .setItems(items) { _, i ->
+                if (i == 0) {
+                    pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                } else {
+                    prefs.appBackgroundFile.delete()
+                    applyBackground()
+                    toast("기본 배경으로 되돌렸습니다.")
+                }
+            }
+            .show()
     }
 
     private fun hasBackground() = prefs.appBackgroundFile.exists()
 
-    /** 배경 사진이 있으면 카드 뒤에 깔고 글자를 흰색으로, 없으면 기본 회색 카드 */
+    /** 배경 사진이 있으면 전광판 뒤에 깔고 어둡게 덮음 */
     private fun applyBackground() {
         val bmp = if (hasBackground()) runCatching { BitmapFactory.decodeFile(prefs.appBackgroundFile.path) }.getOrNull() else null
-        previewBg.setImageBitmap(bmp)
+        boardBg.setImageBitmap(bmp)
         val visibility = if (bmp != null) View.VISIBLE else View.GONE
-        previewBg.visibility = visibility
-        previewScrim.visibility = visibility
-        if (bmp != null) {
-            previewTitle.setTextColor(Color.WHITE)
-            previewSummary.setTextColor(0xD9FFFFFF.toInt())
-        } else {
-            previewTitle.setTextColor(0xFF212121.toInt())
-            previewSummary.setTextColor(0xFF616161.toInt())
-        }
-        updatePreview()
+        boardBg.visibility = visibility
+        boardScrim.visibility = visibility
+        bgValue.text = getString(if (bmp != null) R.string.bg_photo else R.string.bg_default)
+        bindBoard()
     }
 
     /**
@@ -232,7 +292,5 @@ class MainActivity : ComponentActivity() {
         return file
     }
 
-    private fun setStatus(msg: String) {
-        status.text = msg
-    }
+    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 }

@@ -52,8 +52,15 @@ object ScoreUpdater {
         val today0 = todayGame?.let { ScoreParser.parseComposite(ScoreParser.compose(it, null), team) }
         // 서비스가 비정상 종료돼 남은 '진행 중' 경기 정리 (실시간 서비스가 돌고 있으면 건드리지 않음)
         if (today0?.isLive != true && !LiveScoreService.running) prefs.liveGame = ""
+        // 오늘 예정 경기는 앱 전광판에 '경기 전'으로 보여줌 (구장 정보가 있으면 함께)
+        prefs.upcomingGame = if (todayGame != null && today0?.state == GameState.SCHEDULED) {
+            ScoreParser.compose(todayGame!!, client.record(todayGame!!.optString("gameId"))).toString()
+        } else ""
+        prefs.lastRefreshAt = System.currentTimeMillis()
+
         val todayMsg = when {
             today0 == null -> ""
+            !prefs.notificationsOn -> ""   // 알림을 끄면 실시간 갱신도 하지 않음
             today0.isLive -> {
                 LiveController.startFromBackground(context)
                 " · 오늘 경기 진행 중 → 실시간 갱신 시작"
@@ -71,12 +78,27 @@ object ScoreUpdater {
         return latestMsg + todayMsg
     }
 
-    /** 알림에 표시할 경기: 진행 중 경기가 있으면 그것, 없으면 가장 최근 종료 경기 */
-    fun currentGame(context: Context): GameResult? {
+    /**
+     * 보여줄 경기: 진행 중 경기 > (앱 화면이면) 오늘 예정 경기 > 가장 최근 종료 경기.
+     * 알림은 예정 경기를 보여주지 않는다([includeUpcoming] = false).
+     */
+    fun currentGame(context: Context, includeUpcoming: Boolean = false): GameResult? {
         val prefs = Prefs(context)
         val team = prefs.teamCode
-        val live = prefs.liveGame.takeIf { it.isNotBlank() }
+        fun parse(json: String) = json.takeIf { it.isNotBlank() }
             ?.let { runCatching { ScoreParser.parseComposite(JSONObject(it), team) }.getOrNull() }
-        return live ?: ScoreParser.parseComposites(JSONArray(prefs.cachedGames), team).firstOrNull()
+
+        val live = parse(prefs.liveGame)
+        if (live != null) return live
+        val latestFinal = ScoreParser.parseComposites(JSONArray(prefs.cachedGames), team).firstOrNull()
+        if (includeUpcoming) {
+            val upcoming = parse(prefs.upcomingGame)
+            val isToday = upcoming != null &&
+                java.time.Instant.ofEpochSecond(upcoming.timestamp).atZone(ScoreParser.SEOUL).toLocalDate() == seoulToday()
+            if (upcoming != null && isToday && upcoming.state == GameState.SCHEDULED && upcoming.id != latestFinal?.id) {
+                return upcoming
+            }
+        }
+        return latestFinal
     }
 }

@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CropMathTest {
-    // 1080x1920 화면, 여백 48 → 2:1 틀
+    // 1080x1920 화면, 여백 48 → 3:2 틀
     private val crop = CropMath.cropBox(1080f, 1920f, 48f)
 
     private fun covers(st: CropState, bw: Int, bh: Int) =
@@ -13,13 +13,13 @@ class CropMathTest {
             st.tx + bw * st.scale >= crop.right - 0.01f && st.ty + bh * st.scale >= crop.bottom - 0.01f
 
     @Test fun cropBoxHasFixedRatioAndIsCentered() {
-        assertEquals(2f, crop.width / crop.height, 0.001f)
+        assertEquals(BackgroundSpec.RATIO, crop.width / crop.height, 0.001f)
         assertEquals(540f, crop.centerX, 0.01f)
         assertEquals(960f, crop.centerY, 0.01f)
         // 가로 화면처럼 높이가 부족하면 높이 기준
         val wide = CropMath.cropBox(2000f, 600f, 50f)
         assertEquals(500f, wide.height, 0.01f)
-        assertEquals(2f, wide.width / wide.height, 0.001f)
+        assertEquals(BackgroundSpec.RATIO, wide.width / wide.height, 0.001f)
     }
 
     @Test fun initialCoversCropForPortraitAndLandscapePhotos() {
@@ -58,9 +58,9 @@ class CropMathTest {
         st = CropMath.pan(st, -120f, 80f, bw, bh, crop)
         val (l, t, w, h) = CropMath.sourceRect(st, crop, bw, bh).toList()
         assertTrue(l >= 0 && t >= 0 && l + w <= bw && t + h <= bh)
-        assertEquals(2.0, w.toDouble() / h, 0.02)
+        assertEquals(BackgroundSpec.RATIO.toDouble(), w.toDouble() / h, 0.02)
         val (ow, oh) = CropMath.outputSize(w)
         assertTrue(ow <= BackgroundSpec.OUTPUT_WIDTH)
-        assertEquals(2.0, ow.toDouble() / oh, 0.01)
+        assertEquals(BackgroundSpec.RATIO.toDouble(), ow.toDouble() / oh, 0.01)
     }
 }
