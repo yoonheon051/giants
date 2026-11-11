@@ -1,0 +1,19 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+
+# 빌드 결과물
+*.apk
+*.aab
+/captures/
+
+# 출시용 서명 키 (절대 올리지 말 것)
+*.jks
+*.keystore
+keystore.properties
+
+# OS·에디터
+.DS_Store
+Thumbs.db

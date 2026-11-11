@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">롯데 스코어보드</string>
+    <string name="pick_background">배경 이미지 선택</string>
+    <string name="clear_background">기본 배경</string>
+    <string name="team_label">응원 팀</string>
+    <string name="team_lotte">롯데 자이언츠</string>
+    <string name="team_korea">국가대표</string>
+    <string name="refresh">결과 불러오기</string>
+    <string name="show_notification">알림 표시</string>
+    <string name="notification_settings">알림 설정 열기</string>
+    <string name="demo">데모 경기 실행</string>
+    <string name="stop_live">실시간 갱신 중지</string>
+</resources>
