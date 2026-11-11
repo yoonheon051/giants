@@ -3,6 +3,10 @@
     <string name="app_name">롯데 스코어보드</string>
     <string name="pick_background">배경 이미지 선택</string>
     <string name="clear_background">기본 배경</string>
+    <string name="crop_title">스코어보드 배경 자르기</string>
+    <string name="crop_help">사진을 끌어서 옮기고, 두 손가락으로 확대·축소하세요. 두 번 탭하면 처음 위치로 돌아갑니다.</string>
+    <string name="crop_cancel">취소</string>
+    <string name="crop_done">완료</string>
     <string name="team_label">응원 팀</string>
     <string name="team_lotte">롯데 자이언츠</string>
     <string name="team_korea">국가대표</string>

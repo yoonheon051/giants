@@ -45,14 +45,28 @@ class MainActivity : ComponentActivity() {
             else setStatus("알림 권한이 없어 스코어보드를 표시할 수 없습니다. '알림 설정 열기'에서 허용해 주세요.")
         }
 
-    /** 시스템 사진 선택기 (저장소 권한 필요 없음) */
+    /** 자르기 화면 → 완료하면 2:1로 잘린 사진이 저장돼 있음 */
+    private val cropBackground =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                setStatus("배경 이미지를 바꿨습니다.")
+                applyBackground()
+            }
+        }
+
+    /** 시스템 사진 선택기 (저장소 권한 필요 없음) → 자르기 화면으로 */
     private val pickBackground =
         registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri == null) return@registerForActivityResult
             lifecycleScope.launch {
-                val ok = withContext(Dispatchers.IO) { runCatching { saveBackground(uri) }.isSuccess }
-                setStatus(if (ok) "배경 이미지를 바꿨습니다." else "이미지를 불러오지 못했습니다.")
-                applyBackground()
+                val file = withContext(Dispatchers.IO) { runCatching { prepareCropSource(uri) }.getOrNull() }
+                if (file == null) {
+                    setStatus("이미지를 불러오지 못했습니다.")
+                } else {
+                    cropBackground.launch(
+                        Intent(this@MainActivity, CropActivity::class.java).putExtra(CropActivity.EXTRA_PATH, file.path)
+                    )
+                }
             }
         }
 
@@ -197,19 +211,25 @@ class MainActivity : ComponentActivity() {
         updatePreview()
     }
 
-    /** 고른 사진을 화면 폭 정도로 줄여 앱 내부 저장소에 복사 (원본이 지워져도 유지되도록) */
-    private fun saveBackground(uri: Uri) {
-        val maxWidth = resources.displayMetrics.widthPixels.coerceAtMost(1440)
+    /**
+     * 고른 사진을 자르기 화면에서 다루기 좋은 크기(긴 변 2048px 이하)로 줄여 임시 파일로 저장.
+     * 사진 방향(세로로 찍은 사진 등)은 ImageDecoder가 알아서 바로잡는다.
+     */
+    private fun prepareCropSource(uri: Uri): java.io.File {
+        val maxSide = 2048
         val source = ImageDecoder.createSource(contentResolver, uri)
         val bmp = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            if (info.size.width > maxWidth) {
-                val scale = maxWidth.toFloat() / info.size.width
-                decoder.setTargetSize(maxWidth, (info.size.height * scale).toInt())
+            val longSide = maxOf(info.size.width, info.size.height)
+            if (longSide > maxSide) {
+                val scale = maxSide.toFloat() / longSide
+                decoder.setTargetSize((info.size.width * scale).toInt(), (info.size.height * scale).toInt())
             }
         }
-        prefs.appBackgroundFile.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        val file = java.io.File(cacheDir, "crop_source.jpg")
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         bmp.recycle()
+        return file
     }
 
     private fun setStatus(msg: String) {

@@ -11,10 +11,11 @@
         android:padding="16dp">
 
         <!--
-          스코어보드 카드 (알림과 같은 내용).
+          스코어보드 카드 (알림과 같은 내용). 가로:세로 2:1 고정 (AspectRatioFrameLayout).
           배경 사진을 고르면: 사진(previewBg) → 어둡게 덮기(previewScrim) → 흰 글씨 스코어보드 순서로 겹침.
+          사진은 자르기 화면에서 같은 2:1로 잘라 저장하므로 고른 그대로 보인다.
         -->
-        <FrameLayout
+        <com.example.lottelock.AspectRatioFrameLayout
             android:id="@+id/previewCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -38,7 +39,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="150dp"
+                android:layout_gravity="center_vertical"
                 android:orientation="vertical"
                 android:padding="16dp">
 
@@ -61,7 +62,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
             </LinearLayout>
-        </FrameLayout>
+        </com.example.lottelock.AspectRatioFrameLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
