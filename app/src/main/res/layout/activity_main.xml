@@ -107,7 +107,7 @@
             android:id="@+id/teamToggle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
             <RadioButton
@@ -139,29 +139,33 @@
                 android:textStyle="bold" />
         </RadioGroup>
 
+        <!-- 하단 버튼: 모두 같은 스타일, 행·열 간격 8dp (위 토글의 4dp+4dp와 동일) -->
         <Button
             android:id="@+id/btnRefresh"
+            style="@style/ActionButton"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="16dp"
             android:text="@string/refresh" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btnShow"
+                style="@style/ActionButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:text="@string/show_notification" />
 
             <Button
                 android:id="@+id/btnNotifSettings"
+                style="@style/ActionButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:text="@string/notification_settings" />
         </LinearLayout>
@@ -169,20 +173,22 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btnDemo"
+                style="@style/ActionButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:text="@string/demo" />
 
             <Button
                 android:id="@+id/btnStopLive"
+                style="@style/ActionButton"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:text="@string/stop_live" />
         </LinearLayout>
