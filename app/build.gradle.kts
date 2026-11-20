@@ -36,12 +36,11 @@ kotlin {
 }
 
 dependencies {
+    // 파싱·네트워크·자르기 계산 등 플랫폼과 무관한 로직 (유닛 테스트도 shared 모듈에 있음)
+    implementation(project(":shared"))
+
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
-
-    testImplementation("junit:junit:4.13.2")
-    // Android의 org.json은 로컬 유닛 테스트에서 동작하지 않으므로 실제 구현을 추가
-    testImplementation("org.json:json:20240303")
 }

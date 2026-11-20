@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -32,6 +33,8 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val changed = !LiveScoreService.running && ScoreNotifier.update(applicationContext, force = false)
             prefs.lastStatus = "$now 자동 갱신 " + if (changed) "(새 결과)" else "(변경 없음)"
             Result.success()
+        } catch (e: CancellationException) {
+            throw e   // 시스템이 작업을 멈춘 것: 오류로 기록하지 않음
         } catch (e: IOException) {
             prefs.lastStatus = "$now 네트워크 오류: ${e.message}"
             Result.retry()

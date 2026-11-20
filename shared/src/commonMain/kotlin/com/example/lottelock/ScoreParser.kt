@@ -1,10 +1,17 @@
 package com.example.lottelock
 
-import org.json.JSONArray
-import org.json.JSONObject
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** 한 팀의 라인스코어 */
 data class TeamLine(
@@ -54,7 +61,7 @@ data class GameResult(
 
 class ApiException(message: String) : Exception(message)
 
-data class Schedule(val games: List<JSONObject>, val totalCount: Int)
+data class Schedule(val games: List<JsonObject>, val totalCount: Int)
 
 /**
  * 네이버 스포츠 응답 파싱.
@@ -65,66 +72,76 @@ data class Schedule(val games: List<JSONObject>, val totalCount: Int)
  * 캐시에는 둘을 묶은 "composite" {"game": 목록 항목, "record": {"scoreBoard": .., "stadium": ..}} 를 저장한다.
  */
 object ScoreParser {
-    val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
+    /** 경기 시각 기준 시간대. 안드로이드의 java.time 쪽은 이 ID로 ZoneId를 만든다 */
+    const val SEOUL_ID = "Asia/Seoul"
+    val SEOUL: TimeZone = TimeZone.of(SEOUL_ID)
 
     fun parseSchedule(body: String): Schedule {
-        val root = JSONObject(body)
-        if (!root.optBoolean("success", true)) throw ApiException(root.optString("message", "네이버 응답 오류 (code ${root.optInt("code")})"))
-        val result = root.optJSONObject("result") ?: return Schedule(emptyList(), 0)
-        val arr = result.optJSONArray("games") ?: JSONArray()
-        val games = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
-        return Schedule(games, result.optInt("gameTotalCount", games.size))
+        val root = parseJsonObject(body)
+        if (!root.bool("success", true)) throw ApiException(root.str("message", "네이버 응답 오류 (code ${root.int("code")})"))
+        val result = root.obj("result") ?: return Schedule(emptyList(), 0)
+        val games = result.arr("games").orEmpty().mapNotNull { it as? JsonObject }
+        return Schedule(games, result.int("gameTotalCount", games.size))
     }
 
     /**
      * 경기 기록 응답 → {"scoreBoard": .. | null, "stadium": ..}. 기록 자체가 없으면 null.
      * 경기 전에는 점수판 없이 구장만 있을 수 있다.
      */
-    fun parseRecord(body: String): JSONObject? {
-        val data = JSONObject(body).optJSONObject("result")?.optJSONObject("recordData") ?: return null
-        val scoreBoard = data.optJSONObject("scoreBoard")
-        val stadium = data.optJSONObject("gameInfo")?.optString("stadium").orEmpty()
+    fun parseRecord(body: String): JsonObject? {
+        val data = parseJsonObject(body).obj("result")?.obj("recordData") ?: return null
+        val scoreBoard = data.obj("scoreBoard")
+        val stadium = data.obj("gameInfo")?.str("stadium").orEmpty()
         if (scoreBoard == null && stadium.isBlank()) return null
-        return JSONObject().put("scoreBoard", scoreBoard ?: JSONObject.NULL).put("stadium", stadium)
+        return buildJsonObject {
+            put("scoreBoard", scoreBoard ?: JsonNull)
+            put("stadium", stadium)
+        }
     }
 
-    fun compose(game: JSONObject, record: JSONObject?): JSONObject =
-        JSONObject().put("game", game).put("record", record ?: JSONObject.NULL)
+    fun compose(game: JsonObject, record: JsonObject?): JsonObject = buildJsonObject {
+        put("game", game)
+        put("record", record ?: JsonNull)
+    }
 
-    fun isTracked(game: JSONObject, team: String): Boolean {
+    fun isTracked(game: JsonObject, team: String): Boolean {
         val t = team.trim()
         if (t.isEmpty()) return false
         return listOf("homeTeamCode", "awayTeamCode", "homeTeamName", "awayTeamName")
-            .any { game.optString(it).equals(t, ignoreCase = true) }
+            .any { game.str(it).equals(t, ignoreCase = true) }
     }
 
-    fun stateOf(game: JSONObject): GameState {
-        val code = game.optString("statusCode")
+    fun stateOf(game: JsonObject): GameState {
+        val code = game.str("statusCode")
         return when {
-            game.optBoolean("cancel") || code == "CANCEL" -> GameState.CANCELLED
-            game.optBoolean("suspended") -> GameState.CANCELLED   // 서스펜디드: 나중에 재개되므로 실시간 갱신은 멈춤
+            game.bool("cancel") || code == "CANCEL" -> GameState.CANCELLED
+            game.bool("suspended") -> GameState.CANCELLED   // 서스펜디드: 나중에 재개되므로 실시간 갱신은 멈춤
             code == "RESULT" -> GameState.FINISHED
             code == "BEFORE" || code.isEmpty() -> GameState.SCHEDULED
             else -> GameState.LIVE                                 // STARTED 등
         }
     }
 
-    fun timestampOf(game: JSONObject): Long =
-        runCatching { LocalDateTime.parse(game.optString("gameDateTime")).atZone(SEOUL).toEpochSecond() }
-            .getOrElse { runCatching { LocalDate.parse(game.optString("gameDate")).atStartOfDay(SEOUL).toEpochSecond() }.getOrDefault(0L) }
+    fun timestampOf(game: JsonObject): Long =
+        runCatching { LocalDateTime.parse(game.str("gameDateTime")).toInstant(SEOUL).epochSeconds }
+            .getOrElse { runCatching { LocalDate.parse(game.str("gameDate")).atStartOfDayIn(SEOUL).epochSeconds }.getOrDefault(0L) }
+
+    /** epoch seconds → 서울 기준 날짜 */
+    fun seoulDateOf(epochSeconds: Long): LocalDate =
+        Instant.fromEpochSeconds(epochSeconds).toLocalDateTime(SEOUL).date
 
     /** 추적 팀의 종료 경기, 최신순 최대 [max]개 */
-    fun pickFinished(games: List<JSONObject>, team: String, max: Int): List<JSONObject> =
+    fun pickFinished(games: List<JsonObject>, team: String, max: Int): List<JsonObject> =
         games.filter { isTracked(it, team) && stateOf(it) == GameState.FINISHED }
-            .distinctBy { it.optString("gameId") }
+            .distinctBy { it.str("gameId") }
             .sortedByDescending { timestampOf(it) }
             .take(max)
 
     /** [today]의 추적 팀 경기 (취소 제외). 여러 개면 진행 중 > 예정 > 종료 (더블헤더 대비) */
-    fun findToday(games: List<JSONObject>, team: String, today: LocalDate): JSONObject? =
+    fun findToday(games: List<JsonObject>, team: String, today: LocalDate): JsonObject? =
         games.filter { isTracked(it, team) && stateOf(it) != GameState.CANCELLED }
-            .filter { java.time.Instant.ofEpochSecond(timestampOf(it)).atZone(SEOUL).toLocalDate() == today }
-            .sortedWith(compareBy<JSONObject> {
+            .filter { seoulDateOf(timestampOf(it)) == today }
+            .sortedWith(compareBy<JsonObject> {
                 when (stateOf(it)) {
                     GameState.LIVE -> 0
                     GameState.SCHEDULED -> 1
@@ -133,57 +150,41 @@ object ScoreParser {
             }.thenByDescending { timestampOf(it) })
             .firstOrNull()
 
-    fun parseComposites(arr: JSONArray, team: String): List<GameResult> =
-        (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let { c -> parseComposite(c, team) } }
+    fun parseComposites(arr: JsonArray, team: String): List<GameResult> =
+        arr.mapNotNull { (it as? JsonObject)?.let { c -> parseComposite(c, team) } }
 
-    fun parseComposite(composite: JSONObject, team: String): GameResult? {
-        val g = composite.optJSONObject("game") ?: return null
-        val record = composite.optJSONObject("record")
-        val sb = record?.optJSONObject("scoreBoard")
+    fun parseComposite(composite: JsonObject, team: String): GameResult? {
+        val g = composite.obj("game") ?: return null
+        val record = composite.obj("record")
+        val sb = record?.obj("scoreBoard")
         val home = line(g, "home", sb)
         val away = line(g, "away", sb)
         return GameResult(
-            id = g.optString("gameId"),
+            id = g.str("gameId"),
             timestamp = timestampOf(g),
             state = stateOf(g),
-            statusInfo = g.optString("statusInfo"),
-            stadium = record?.optString("stadium")?.takeIf { it.isNotBlank() },
-            category = g.optString("categoryId"),
+            statusInfo = g.str("statusInfo"),
+            stadium = record?.str("stadium")?.takeIf { it.isNotBlank() },
+            category = g.str("categoryId"),
             away = away,
             home = home,
             trackedIsHome = home.code.equals(team.trim(), true) || home.name.equals(team.trim(), true),
         )
     }
 
-    private fun line(g: JSONObject, side: String, sb: JSONObject?): TeamLine {
-        val inn = sb?.optJSONObject("inn")?.optJSONArray(side)
-        val rheb = sb?.optJSONObject("rheb")?.optJSONObject(side)
+    private fun line(g: JsonObject, side: String, sb: JsonObject?): TeamLine {
+        val inn = sb?.obj("inn")?.arr(side)
+        val rheb = sb?.obj("rheb")?.obj(side)
         val innings = (0 until 9).map { inn?.intAt(it) }
-        val extras = if (inn != null && inn.length() > 9) (9 until inn.length()).mapNotNull { inn.intAt(it) } else emptyList()
+        val extras = if (inn != null && inn.size > 9) (9 until inn.size).mapNotNull { inn.intAt(it) } else emptyList()
         return TeamLine(
-            code = g.optString("${side}TeamCode"),
-            name = g.optString("${side}TeamName"),
+            code = g.str("${side}TeamCode"),
+            name = g.str("${side}TeamName"),
             innings = innings,
             extra = if (extras.isEmpty()) null else extras.sum(),
-            runs = rheb?.intOrNull("r") ?: g.optInt("${side}TeamScore"),
+            runs = rheb?.intOrNull("r") ?: g.int("${side}TeamScore"),
             hits = rheb?.intOrNull("h"),
             errors = rheb?.intOrNull("e"),
         )
-    }
-
-    /** 숫자 또는 숫자 문자열만 인정. "-", "X", "" 등은 null (진행 안 한 이닝) */
-    private fun JSONArray.intAt(i: Int): Int? = when (val v = opt(i)) {
-        is Number -> v.toInt()
-        is String -> v.trim().toIntOrNull()
-        else -> null
-    }
-
-    private fun JSONObject.intOrNull(key: String): Int? {
-        if (!has(key) || isNull(key)) return null
-        return when (val v = opt(key)) {
-            is Number -> v.toInt()
-            is String -> v.trim().toIntOrNull()
-            else -> null
-        }
     }
 }

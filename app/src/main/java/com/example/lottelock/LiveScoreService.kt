@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -116,8 +117,10 @@ class LiveScoreService : Service() {
                     ?: run { setStatus("오늘 경기가 없습니다."); return true }
                 // 진행 중·종료 경기만 이닝별 기록을 받음 (예정 경기는 목록만으로 충분)
                 val needRecord = ScoreParser.stateOf(raw).let { it == GameState.LIVE || it == GameState.FINISHED }
-                ScoreParser.compose(raw, if (needRecord) client.record(raw.optString("gameId")) else null)
+                ScoreParser.compose(raw, if (needRecord) client.record(raw.str("gameId")) else null)
             }
+        } catch (e: CancellationException) {
+            throw e   // 서비스 종료로 요청이 취소된 것: 오류로 기록하지 않음
         } catch (e: IOException) {
             setStatus("네트워크 오류, 다음 주기에 재시도: ${e.message}"); return false
         } catch (e: Exception) {

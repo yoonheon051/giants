@@ -15,8 +15,12 @@ import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/** 화면·알림의 날짜 표시용 서울 시간대 (java.time). 공통 코드는 kotlinx-datetime의 ScoreParser.SEOUL을 쓴다 */
+val SEOUL_ZONE: ZoneId = ZoneId.of(ScoreParser.SEOUL_ID)
 
 /**
  * 스코어보드 알림.
@@ -187,7 +191,7 @@ object ScoreNotifier {
     }
 
     private fun date(game: GameResult): String =
-        Instant.ofEpochSecond(game.timestamp).atZone(ScoreParser.SEOUL).format(DATE_FMT)
+        Instant.ofEpochSecond(game.timestamp).atZone(SEOUL_ZONE).format(DATE_FMT)
 
     private fun bold(s: String) = SpannableString(s).apply { setSpan(StyleSpan(Typeface.BOLD), 0, length, 0) }
 }

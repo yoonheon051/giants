@@ -2,16 +2,12 @@ package com.example.lottelock
 
 import android.content.Context
 import androidx.core.content.edit
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** 선택할 수 있는 팀 */
-enum class TeamChoice(val code: String, val category: String) {
-    LOTTE("LT", "kbo"),
-    KOREA("KR", ""),
-}
+// 응원 팀 목록(TeamChoice)은 아이폰과 함께 쓰도록 shared 모듈에 있다.
 
 class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("lotte_lock", Context.MODE_PRIVATE)
@@ -65,23 +61,17 @@ class Prefs(context: Context) {
         set(v) = sp.edit { putString("last_status", v) }
 
     /** 캐시에 있는 경기 composite (기록을 다시 받지 않으려고) */
-    fun cachedComposite(gameId: String): JSONObject? {
-        val arr = JSONArray(cachedGames)
-        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
-            .firstOrNull { it.optJSONObject("game")?.optString("gameId") == gameId && it.optJSONObject("record") != null }
-    }
+    fun cachedComposite(gameId: String): JsonObject? =
+        cachedList().firstOrNull { it.obj("game")?.str("gameId") == gameId && it.obj("record") != null }
 
     /** 방금 끝난 경기를 종료 경기 캐시 맨 앞에 추가 */
-    fun addFinishedGame(composite: JSONObject) {
-        val id = composite.optJSONObject("game")?.optString("gameId")
-        val old = JSONArray(cachedGames)
-        val merged = JSONArray().put(composite)
-        for (i in 0 until old.length()) {
-            val g = old.optJSONObject(i) ?: continue
-            if (g.optJSONObject("game")?.optString("gameId") != id && merged.length() < MAX_GAMES) merged.put(g)
-        }
-        cachedGames = merged.toString()
+    fun addFinishedGame(composite: JsonObject) {
+        val id = composite.obj("game")?.str("gameId")
+        val rest = cachedList().filter { it.obj("game")?.str("gameId") != id }
+        cachedGames = JsonArray((listOf(composite) + rest).take(MAX_GAMES)).toString()
     }
+
+    private fun cachedList(): List<JsonObject> = parseJsonArray(cachedGames).mapNotNull { it as? JsonObject }
 
     // ── 하루 요청 수 (비공식 API라 과하게 부르지 않도록)
     private fun today() = LocalDate.now(ZoneId.of("Asia/Seoul")).toString()

@@ -69,7 +69,7 @@ class ScoreboardBinder(root: View) {
         }
 
         // 날짜 · (경기 전이면 시작 시각) · 구장 · (KBO가 아니면 대회 이름)
-        val start = Instant.ofEpochSecond(game.timestamp).atZone(ScoreParser.SEOUL)
+        val start = Instant.ofEpochSecond(game.timestamp).atZone(SEOUL_ZONE)
         meta.text = listOfNotNull(
             start.format(DATE_FMT) + if (game.state == GameState.SCHEDULED) " " + start.format(TIME_FMT) else "",
             game.stadium,
@@ -80,7 +80,7 @@ class ScoreboardBinder(root: View) {
 
         // 아래 띠
         val score = "${game.away.runs} - ${game.home.runs}"
-        val refreshed = if (refreshedAt > 0) Instant.ofEpochMilli(refreshedAt).atZone(ScoreParser.SEOUL).format(TIME_FMT) + " 갱신" else ""
+        val refreshed = if (refreshedAt > 0) Instant.ofEpochMilli(refreshedAt).atZone(SEOUL_ZONE).format(TIME_FMT) + " 갱신" else ""
         when (game.state) {
             GameState.SCHEDULED -> {
                 stripLeft.text = if (notificationsOn) "실시간 갱신 예약됨" else ""

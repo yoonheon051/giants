@@ -35,9 +35,14 @@
 flowchart LR
     MA["MainActivity<br/>앱 화면"] -- "결과 불러오기" --> SU["ScoreUpdater"]
     UW["UpdateWorker<br/>3시간마다"] --> SU
-    SU --> NC["NaverSportsClient"]
+    subgraph SHARED["shared 모듈 · 안드로이드·아이폰 공통"]
+        NC["NaverSportsClient<br/>Ktor"]
+        SP["ScoreParser"]
+        CM["CropMath"]
+    end
+    SU --> NC
     NC --> API[("네이버 스포츠<br/>비공식 API")]
-    SU -- "응답 파싱" --> SP["ScoreParser"]
+    SU -- "응답 파싱" --> SP
     SU -- "경기 저장" --> PR[("Prefs<br/>SharedPreferences")]
     SU -- "오늘 경기 있음" --> LC["LiveController<br/>정확한 알람"]
     LC -- "경기 시작 시각" --> GR["GameStartReceiver"] --> LS["LiveScoreService<br/>포그라운드 서비스"]
@@ -48,6 +53,7 @@ flowchart LR
     PR --> SB
     PR --> SN
     MA -- "사진 선택" --> CA["CropActivity<br/>3:2 자르기"] -- "app_background.jpg" --> SB
+    CA --> CM
 ```
 
 ### 결과 갱신 (`ScoreUpdater.refresh`)
@@ -181,7 +187,7 @@ flowchart TD
 - 앱의 **휴대폰 알림 설정**에서 '경기 스코어보드' 채널이 켜져 있고 잠금화면 표시가 허용돼 있는지 확인합니다.
 
 ## 테스트
-- **유닛 테스트**: `app/src/test/`. 실제 네이버 응답(2026년 9월 롯데 경기, APBC 일정)으로 파싱을 확인하고, 자르기 계산도 확인합니다.
+- **유닛 테스트**: `shared/src/commonTest/`. 실제 네이버 응답(2026년 9월 롯데 경기, APBC 일정)으로 파싱을 확인하고, 자르기 계산도 확인합니다. 공통 코드 테스트라서 Mac이 생기면 같은 테스트를 iOS 시뮬레이터에서도 돌릴 수 있습니다.
   ```bash
   ./gradlew test
   ```
@@ -189,22 +195,38 @@ flowchart TD
 - **데모 경기**: 화면에는 버튼이 없고, 제목 **"스코어보드"를 길게 누르면** 실행됩니다. 가상 경기가 20초마다 반 이닝씩 진행돼서 알림과 전광판이 바뀌는 걸 확인할 수 있습니다. 끝나면 1분 동안 최종 스코어를 보여준 뒤 실제 최근 경기로 돌아갑니다.
 
 ## 프로젝트 구조
+두 모듈로 나뉩니다.
+
+- **`shared/`** (Kotlin Multiplatform): 플랫폼과 무관한 로직. 안드로이드 앱이 쓰고, 나중에 아이폰 앱도 그대로 쓸 수 있습니다. JSON은 `kotlinx.serialization`, 날짜는 `kotlinx-datetime`, 네트워크는 `Ktor`(안드로이드: HttpURLConnection, 아이폰: NSURLSession)를 씁니다.
+- **`app/`** (안드로이드 앱): 화면, 알림, 알람, 백그라운드 작업처럼 안드로이드 기능에 묶인 코드.
+
+iOS 타깃(`iosArm64`, `iosSimulatorArm64`, `iosX64`, 프레임워크 이름 `Shared`)은 설정돼 있지만 **Mac(Xcode)에서만 빌드**됩니다. 윈도우에서는 건너뛰고 안드로이드 쪽만 빌드·테스트합니다. 아이폰 앱(SwiftUI 화면, 라이브 액티비티 등)은 아직 없습니다.
+
+**`shared/src/commonMain/kotlin/com/example/lottelock/`**
+
+| 파일 | 역할 |
+|---|---|
+| `ScoreParser.kt` | 네이버 응답 파싱, 응원 팀의 종료·진행 중·예정 경기 찾기 |
+| `NaverSportsClient.kt` | 네이버 스포츠 경기 목록·기록 요청 (Ktor) |
+| `Json.kt` | 응답·저장 JSON을 읽는 도우미 (값이 없으면 기본값) |
+| `TeamChoice.kt` | 응원 팀 목록 (롯데 / 국가대표) |
+| `CropMath.kt` | 자르기 계산 (확대 한도, 빈틈 방지, 잘라낼 영역) |
+| `DemoGame.kt` | 테스트용 가상 경기 |
+
+**`app/src/main/java/com/example/lottelock/`**
+
 | 파일 | 역할 |
 |---|---|
 | `MainActivity.kt` | 메인 화면 (팀 선택, 결과 불러오기, 설정 목록) |
 | `ScoreboardBinder.kt` | 앱 화면 전광판 그리기 (제목, 상태, 라인스코어, 아래 띠) |
 | `AspectRatioFrameLayout.kt` | 3:2 비율로 고정되는 전광판 카드 |
 | `CropActivity.kt`, `CropImageView.kt` | 배경 사진 자르기 화면 (3:2 틀, 이동·확대) |
-| `CropMath.kt` | 자르기 계산 (확대 한도, 빈틈 방지, 잘라낼 영역) |
-| `ScoreParser.kt` | 네이버 응답 파싱, 응원 팀의 종료·진행 중·예정 경기 찾기 |
-| `NaverSportsClient.kt` | 네이버 스포츠 경기 목록·기록 요청 |
 | `ScoreUpdater.kt` | 결과 갱신·저장, 오늘 경기 감지 → 실시간 갱신 예약 |
 | `ScoreNotifier.kt` | 스코어보드 알림 (접힌 요약 + 펼친 라인스코어) |
 | `UpdateWorker.kt` | 3시간 주기 자동 갱신 |
 | `LiveController.kt` | 정확한 알람 예약, 실시간 서비스 시작·중지 |
 | `LiveScoreService.kt` | 경기 중 실시간 갱신 (포그라운드 서비스) |
 | `Prefs.kt` | 설정·저장값 (응원 팀, 알림 스위치, 저장된 경기) |
-| `DemoGame.kt` | 테스트용 가상 경기 |
 | `res/layout/activity_main.xml` | 메인 화면 레이아웃 |
 | `res/layout/notification_scoreboard.xml` | 펼친 알림의 라인스코어 |
 | `res/font/` | `giants_inline.otf`(전광판 제목), `vt323.ttf`(전광판 숫자) |

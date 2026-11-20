@@ -1,8 +1,14 @@
 package com.example.lottelock
 
-import org.json.JSONArray
-import org.json.JSONObject
-import java.time.LocalDateTime
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
 
 /**
@@ -24,11 +30,13 @@ class DemoGame(teamCode: String, private val random: Random = Random.Default) {
     private var awayHits = 0
     private var homeHits = 0
     private var halves = 0                      // 진행된 반 이닝 수 (0~18)
-    private val startedAt = LocalDateTime.now(ScoreParser.SEOUL).withNano(0)
+    private val startedAt = Clock.System.now().toLocalDateTime(ScoreParser.SEOUL).let {
+        LocalDateTime(it.year, it.month, it.dayOfMonth, it.hour, it.minute, it.second)   // 초 단위로 자름
+    }
 
     val isOver: Boolean get() = halves >= 18
 
-    fun next(): JSONObject {
+    fun next(): JsonObject {
         if (!isOver) {
             val inning = halves / 2
             val runs = listOf(0, 0, 0, 0, 1, 1, 2, 3)[random.nextInt(8)]
@@ -43,27 +51,32 @@ class DemoGame(teamCode: String, private val random: Random = Random.Default) {
         }
         val lastInning = (halves + 1) / 2
         val statusInfo = if (halves % 2 == 1) "${lastInning}회초" else "${lastInning}회말"
-        val game = JSONObject()
-            .put("gameId", "DEMO")
-            .put("gameDateTime", startedAt.toString())
-            .put("homeTeamCode", trackedCode).put("homeTeamName", trackedName).put("homeTeamScore", sum(home))
-            .put("awayTeamCode", opponentCode).put("awayTeamName", opponentName).put("awayTeamScore", sum(away))
-            .put("statusCode", if (isOver) "RESULT" else "STARTED")
-            .put("statusInfo", statusInfo)
-            .put("cancel", false)
-        val scoreBoard = JSONObject()
-            .put("inn", JSONObject().put("away", innings(away)).put("home", innings(home)))
-            .put("rheb", JSONObject()
-                .put("away", JSONObject().put("r", sum(away)).put("h", awayHits).put("e", 0))
-                .put("home", JSONObject().put("r", sum(home)).put("h", homeHits).put("e", 0)))
-        return ScoreParser.compose(game, JSONObject().put("scoreBoard", scoreBoard).put("stadium", "데모구장"))
+        val game = buildJsonObject {
+            put("gameId", "DEMO")
+            put("gameDateTime", startedAt.toString())
+            put("homeTeamCode", trackedCode); put("homeTeamName", trackedName); put("homeTeamScore", sum(home))
+            put("awayTeamCode", opponentCode); put("awayTeamName", opponentName); put("awayTeamScore", sum(away))
+            put("statusCode", if (isOver) "RESULT" else "STARTED")
+            put("statusInfo", statusInfo)
+            put("cancel", false)
+        }
+        val record = buildJsonObject {
+            putJsonObject("scoreBoard") {
+                putJsonObject("inn") {
+                    put("away", innings(away))
+                    put("home", innings(home))
+                }
+                putJsonObject("rheb") {
+                    putJsonObject("away") { put("r", sum(away)); put("h", awayHits); put("e", 0) }
+                    putJsonObject("home") { put("r", sum(home)); put("h", homeHits); put("e", 0) }
+                }
+            }
+            put("stadium", "데모구장")
+        }
+        return ScoreParser.compose(game, record)
     }
 
-    private fun innings(a: Array<Int?>): JSONArray {
-        val arr = JSONArray()
-        a.forEach { arr.put(it ?: "-") }
-        return arr
-    }
+    private fun innings(a: Array<Int?>) = JsonArray(a.map { if (it == null) JsonPrimitive("-") else JsonPrimitive(it) })
 
     private fun sum(a: Array<Int?>) = a.sumOf { it ?: 0 }
 

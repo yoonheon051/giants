@@ -1,8 +1,8 @@
 package com.example.lottelock
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class CropMathTest {
     // 1080x1920 화면, 여백 48 → 3:2 틀
@@ -25,7 +25,7 @@ class CropMathTest {
     @Test fun initialCoversCropForPortraitAndLandscapePhotos() {
         for ((bw, bh) in listOf(3000 to 4000, 4000 to 1000, 900 to 600, 500 to 500)) {
             val st = CropMath.initial(bw, bh, crop)
-            assertTrue("$bw x $bh", covers(st, bw, bh))
+            assertTrue(covers(st, bw, bh), "$bw x $bh")
         }
     }
 

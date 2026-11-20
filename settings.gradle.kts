@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "LotteLockScreen"
 include(":app")
+include(":shared")
