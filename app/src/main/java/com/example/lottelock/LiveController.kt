@@ -30,11 +30,7 @@ object LiveController {
     /** [atMillis]에 실시간 갱신 시작 (경기 시작 시각) */
     fun scheduleStart(context: Context, atMillis: Long) {
         val am = context.getSystemService(AlarmManager::class.java)
-        val pi = PendingIntent.getBroadcast(
-            context, 0,
-            Intent(context, GameStartReceiver::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val pi = startIntent(context, PendingIntent.FLAG_UPDATE_CURRENT)!!
         val at = maxOf(atMillis, System.currentTimeMillis() + 1_000)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)   // 권한 없으면 부정확 알람 (시작이 늦어질 수 있음)
@@ -43,13 +39,30 @@ object LiveController {
         }
     }
 
+    /** 실시간 서비스를 멈추고, 아직 울리지 않은 시작 알람도 취소한다 (안 그러면 경기 시작 시각에 다시 켜짐) */
     fun stop(context: Context) {
         context.stopService(Intent(context, LiveScoreService::class.java))
+        cancelScheduled(context)
     }
+
+    /** 예약해 둔 시작 알람 취소. 다음 결과 갱신에서 오늘 경기가 있으면 다시 예약된다 */
+    fun cancelScheduled(context: Context) {
+        val pi = startIntent(context, PendingIntent.FLAG_NO_CREATE) ?: return
+        context.getSystemService(AlarmManager::class.java).cancel(pi)
+        pi.cancel()
+    }
+
+    private fun startIntent(context: Context, flag: Int): PendingIntent? = PendingIntent.getBroadcast(
+        context, 0,
+        Intent(context, GameStartReceiver::class.java),
+        PendingIntent.FLAG_IMMUTABLE or flag,
+    )
 }
 
 class GameStartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // 알람을 예약한 뒤 '알림에 스코어보드 표시'를 껐으면 시작하지 않는다 (끄면 실시간 갱신도 안 하기로 했으므로)
+        if (!Prefs(context).notificationsOn) return
         runCatching { LiveController.startNow(context) }
             .onFailure { Prefs(context).lastStatus = "실시간 갱신 시작 실패: ${it.message}" }
     }

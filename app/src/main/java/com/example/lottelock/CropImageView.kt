@@ -13,7 +13,7 @@ import android.view.ScaleGestureDetector
 import android.view.View
 
 /**
- * 고정 비율(2:1) 틀 아래에서 사진을 끌고(이동) 두 손가락으로 확대·축소해 자를 부분을 고르는 뷰.
+ * 고정 비율(3:2) 틀 아래에서 사진을 끌고(이동) 두 손가락으로 확대·축소해 자를 부분을 고르는 뷰.
  * 계산은 [CropMath]가 하고, 이 뷰는 그리기와 터치 입력만 담당한다.
  */
 class CropImageView @JvmOverloads constructor(
@@ -40,6 +40,7 @@ class CropImageView @JvmOverloads constructor(
         style = Paint.Style.STROKE; color = 0x66FFFFFF; strokeWidth = 1f * density
     }
     private val dimPath = Path()
+    private val cropRect = RectF()   // onDraw 마다 새로 만들지 않도록 재사용
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
@@ -90,7 +91,8 @@ class CropImageView @JvmOverloads constructor(
         dimPath.reset()
         dimPath.fillType = Path.FillType.EVEN_ODD
         dimPath.addRect(0f, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
-        dimPath.addRoundRect(RectF(crop.left, crop.top, crop.right, crop.bottom), r, r, Path.Direction.CW)
+        cropRect.set(crop.left, crop.top, crop.right, crop.bottom)
+        dimPath.addRoundRect(cropRect, r, r, Path.Direction.CW)
         canvas.drawPath(dimPath, dimPaint)
 
         // 3등분 안내선 + 테두리
@@ -100,7 +102,7 @@ class CropImageView @JvmOverloads constructor(
             canvas.drawLine(x, crop.top, x, crop.bottom, gridPaint)
             canvas.drawLine(crop.left, y, crop.right, y, gridPaint)
         }
-        canvas.drawRoundRect(RectF(crop.left, crop.top, crop.right, crop.bottom), r, r, framePaint)
+        canvas.drawRoundRect(cropRect, r, r, framePaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -112,7 +114,7 @@ class CropImageView @JvmOverloads constructor(
 
     override fun performClick(): Boolean = super.performClick()
 
-    /** 틀 안에 보이는 부분을 2:1로 잘라 저장 크기로 줄인 비트맵 */
+    /** 틀 안에 보이는 부분을 3:2로 잘라 저장 크기로 줄인 비트맵 */
     fun cropped(): Bitmap? {
         val b = bitmap ?: return null
         val (l, t, w, h) = CropMath.sourceRect(state, crop, b.width, b.height).toList()

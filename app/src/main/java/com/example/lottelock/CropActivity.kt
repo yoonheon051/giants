@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * 배경 사진 자르기 화면. 2:1 틀이 고정돼 있고, 사진을 움직이거나 확대해서 맞춘 뒤 '완료'.
+ * 배경 사진 자르기 화면. 3:2 틀이 고정돼 있고, 사진을 움직이거나 확대해서 맞춘 뒤 '완료'.
  * 입력: [EXTRA_PATH] (MainActivity가 줄여서 저장해 둔 임시 파일)
  * 결과: Prefs.appBackgroundFile 에 저장하고 RESULT_OK
  */

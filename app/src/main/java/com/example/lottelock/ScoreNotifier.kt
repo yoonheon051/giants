@@ -161,7 +161,8 @@ object ScoreNotifier {
         if (!canNotify(context)) return false
         val sig = listOf(
             game.id, game.state, game.statusInfo, game.away.innings, game.home.innings,
-            game.away.runs, game.home.runs, game.away.hits, game.home.hits, note, prefs.teamCode,
+            game.away.runs, game.home.runs, game.away.hits, game.home.hits, game.away.errors, game.home.errors,
+            game.away.extra, game.home.extra, note, prefs.teamCode,
         ).joinToString("|")
         if (!force && sig == prefs.lastNotifiedSignature) return false
         return try {

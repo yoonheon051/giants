@@ -169,7 +169,7 @@ class MainActivity : ComponentActivity() {
     /** 팀을 바꾸면 예전 팀 결과·실시간 갱신을 정리하고 새 팀 결과를 바로 불러온다 */
     private fun selectTeam(choice: TeamChoice) {
         if (choice == prefs.team) return
-        if (LiveScoreService.running) LiveController.stop(this)
+        LiveController.stop(this)   // 예전 팀 경기로 예약된 알람까지 취소 (새 팀 경기는 refresh가 다시 예약)
         prefs.team = choice
         prefs.cachedGames = "[]"
         prefs.liveGame = ""
@@ -227,7 +227,7 @@ class MainActivity : ComponentActivity() {
 
     private fun turnNotificationsOff() {
         prefs.notificationsOn = false
-        if (LiveScoreService.running) LiveController.stop(this)
+        LiveController.stop(this)   // 돌고 있는 서비스와 예약된 시작 알람 모두
         ScoreNotifier.cancel(this)
         bindBoard()
     }
