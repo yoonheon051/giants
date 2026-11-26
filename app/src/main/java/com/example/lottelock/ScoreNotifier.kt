@@ -109,14 +109,14 @@ object ScoreNotifier {
             .build()
     }
 
-    private var lastIslandServiceText = ""
+    private var lastIslandServiceKey = ""
 
     /** 아일랜드 사용 중 서비스 알림을 내용이 바뀌었을 때만 고침 */
     @SuppressLint("MissingPermission")
     fun notifyIslandService(context: Context, game: GameResult?, note: String?, force: Boolean = false) {
         val key = listOf(game?.scoreLine, game?.liveLabel, game?.state, note).joinToString("|")
-        if (!force && key == lastIslandServiceText) return
-        lastIslandServiceText = key
+        if (!force && key == lastIslandServiceKey) return
+        lastIslandServiceKey = key
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, buildIslandService(context, game, note)) }
     }
 

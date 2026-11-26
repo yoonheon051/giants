@@ -25,7 +25,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * 경기 중 화면 위에 떠 있는 검은 알약 스코어보드.
+ * 화면 위에 떠 있는 검은 알약 스코어보드 (평소엔 최근 경기, 경기 중엔 실시간 점수).
  * Lucian UX/UI #459 '다이내믹 아일랜드'의 모양과 움직임을 Android 뷰로 옮겼다.
  *  - 크기·모서리·곡선은 원본 값 그대로: 접힘 206×36(모서리 18) → 펼침 316×132,
  *    크기는 cubic-bezier(.3,1.32,.5,1) 580ms 스프링, 내용은 나가는 쪽 160ms 페이드 → 들어오는 쪽 130ms 뒤 300ms 페이드 + 0.9배에서 커짐
@@ -201,7 +201,7 @@ class IslandView(context: Context) : View(context) {
             if (g != null) drawExpanded(it, g) else {
                 drawCentered(it, "아직 불러온 경기가 없습니다", ew / 2, dp(52f), 14f, semibold, WHITE)
                 drawCentered(it, "앱에서 '결과 불러오기'를 눌러 주세요", ew / 2, dp(76f), 12f, semibold, DIM)
-                drawCentered(it, "한 번 더 누르면 앱 열기", ew / 2, dp(118f), 11f, semibold, HINT)
+                drawCentered(it, "한 번 더 누르면 앱 열기", ew / 2, dp(118f), 11f, semibold, FAINT)
             }
         }
         canvas.restore()
@@ -274,7 +274,7 @@ class IslandView(context: Context) : View(context) {
         val cell = (contentW - teamCol) / labels.size
         val rowH = dp(20f)
         var rowY = dp(52f)
-        labels.forEachIndexed { i, s -> drawCentered(c, s, pad + teamCol + cell * (i + 0.5f), rowY, 11f, semibold, LABEL) }
+        labels.forEachIndexed { i, s -> drawCentered(c, s, pad + teamCol + cell * (i + 0.5f), rowY, 11f, semibold, FAINT) }
 
         val homeWon = g.isFinished && g.home.runs > g.away.runs
         listOf(g.away to false, g.home to true).forEach { (line, isHome) ->
@@ -296,7 +296,7 @@ class IslandView(context: Context) : View(context) {
             drawCentered(c, line.errors?.toString() ?: "-", pad + teamCol + cell * (base + 2.5f), rowY, 13.5f, semibold, DIM)
         }
 
-        drawCentered(c, "한 번 더 누르면 앱 열기", ew / 2, dp(118f), 11f, semibold, HINT)
+        drawCentered(c, "한 번 더 누르면 앱 열기", ew / 2, dp(118f), 11f, semibold, FAINT)
     }
 
     // ── 글자 도우미 (y는 글자 세로 가운데)
@@ -367,8 +367,7 @@ class IslandView(context: Context) : View(context) {
         private const val BLACK = 0xFF000000.toInt()
         private const val WHITE = 0xFFFFFFFF.toInt()
         private const val DIM = 0x8CFFFFFF.toInt()
-        private const val LABEL = 0x73FFFFFF
-        private const val HINT = 0x73FFFFFF
+        private const val FAINT = 0x73FFFFFF   // 이닝 번호·안내 문구 (흰색 45%)
         private const val GREEN = 0xFF30D158.toInt()
         private const val ORANGE = 0xFFFF9F0A.toInt()
         private const val RED = 0xFFFF5C73.toInt()   // 앱 전광판의 응원 팀 빨강

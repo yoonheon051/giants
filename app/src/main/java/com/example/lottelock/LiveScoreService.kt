@@ -21,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -33,7 +34,7 @@ import java.util.Locale
  *  - 점수가 바뀌었을 때만 알림 갱신
  *  - 경기가 끝나면 최종 스코어 알림을 남기고 스스로 종료
  *  - 아일랜드를 켰으면([Prefs.islandReady]) 점수는 화면 위 알약으로 보여주고,
- *    알림은 시스템이 요구하는 조용한 한 줄 알림만 남긴다
+ *    알림은 시스템이 요구하는 조용한 한 줄 알림만 남긴다 (끝나면 알약은 최종 스코어로 남음)
  */
 class LiveScoreService : Service() {
 
@@ -192,7 +193,7 @@ class LiveScoreService : Service() {
 
     private fun refreshUi() {
         val live = prefs.liveGame.takeIf { it.isNotBlank() }
-            ?.let { runCatching { ScoreParser.parseComposite(org.json.JSONObject(it), prefs.teamCode) }.getOrNull() }
+            ?.let { runCatching { ScoreParser.parseComposite(JSONObject(it), prefs.teamCode) }.getOrNull() }
         present(live, if (live == null) WAITING else if (demo) "데모" else null)
     }
 

@@ -57,6 +57,7 @@ class Prefs(context: Context) {
      * 알약을 길게 누르거나 스위치를 끄면 꺼진다.
      */
     var islandOn: Boolean
+        // "island_pinned": 예전 '아일랜드 지금 띄우기' 값. 켜져 있었으면 켜진 것으로 보고, 다음 저장 때 지움
         get() = sp.getBoolean("island_on", false) || sp.getBoolean("island_pinned", false)
         set(v) = sp.edit { putBoolean("island_on", v); remove("island_pinned") }
 

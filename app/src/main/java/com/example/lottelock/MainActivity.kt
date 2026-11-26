@@ -125,10 +125,10 @@ class MainActivity : ComponentActivity() {
 
         // 알림에 스코어보드 표시
         setSwitchSilently(prefs.notificationsOn && hasNotificationPermission())
-        notifSwitch.setOnCheckedChangeListener { _, on -> if (on) ensurePermissionThenTurnOn() else turnNotificationsOff() }
 
-        // 경기 중 아일랜드 표시
+        // 아일랜드 표시 (알약을 길게 눌러 끄면 스위치도 같이 꺼지도록)
         setIslandSwitchSilently(prefs.islandReady())
+        IslandController.onIslandChanged = { setIslandSwitchSilently(prefs.islandReady()); bindBoard() }
 
         findViewById<View>(R.id.rowBackground).setOnClickListener { showBackgroundMenu() }
         findViewById<View>(R.id.rowNotifSettings).setOnClickListener {
@@ -160,9 +160,13 @@ class MainActivity : ComponentActivity() {
         if (notifSwitch.isChecked && !hasNotificationPermission()) setSwitchSilently(false)
         // '다른 앱 위에 표시' 권한을 거둔 경우
         if (islandSwitch.isChecked && !IslandController.canDraw(this)) setIslandSwitchSilently(false)
-        // 아일랜드: 앱이 종료됐다가 다시 열렸으면 다시 띄우고, 알약을 길게 눌러 껐으면 스위치를 갱신
-        IslandController.onIslandChanged = { setIslandSwitchSilently(prefs.islandReady()); bindBoard() }
-        if (!LiveScoreService.islandActive) IslandController.showIdle(this)
+        // 앱이 종료됐다가 다시 열렸으면 아일랜드를 다시 띄움
+        IslandController.sync(this)
+    }
+
+    override fun onDestroy() {
+        IslandController.onIslandChanged = null   // 화면이 사라진 뒤에는 스위치를 건드리지 않도록 (메모리 누수 방지)
+        super.onDestroy()
     }
 
     // ── 응원 팀
@@ -196,7 +200,7 @@ class MainActivity : ComponentActivity() {
         prefs.liveGame = ""
         prefs.upcomingGame = ""
         prefs.lastNotifiedSignature = ""
-        if (!LiveScoreService.islandActive) IslandController.showIdle(this)
+        IslandController.sync(this)
         bindTeamChip()
         bindBoard()
         refresh()
@@ -215,7 +219,7 @@ class MainActivity : ComponentActivity() {
                     ScoreNotifier.update(this@MainActivity, force = true)
                 }
             }.onFailure { toast("불러오지 못했습니다: ${it.message}") }
-            if (!LiveScoreService.islandActive) IslandController.showIdle(this@MainActivity)   // 직접 띄운 아일랜드도 새 결과로
+            IslandController.sync(this@MainActivity)   // 떠 있는 아일랜드도 새 결과로
             bindBoard()
         }
     }
@@ -244,7 +248,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         prefs.lastNotifiedSignature = ""
-        // 경기 중 아일랜드가 점수를 보여주는 동안에는 알림을 건드리지 않음 (경기가 끝나면 최종 스코어가 알림에 남음)
+        // 아일랜드가 실시간 점수를 보여주는 동안에는 알림을 건드리지 않음 (경기가 끝나면 최종 스코어가 알림에 남음)
         if (!LiveScoreService.islandActive && !ScoreNotifier.update(this, force = true)) toast("먼저 '결과 불러오기'를 누르세요.")
         bindBoard()
     }
@@ -262,14 +266,13 @@ class MainActivity : ComponentActivity() {
         bindBoard()
     }
 
-    // ── 경기 중 아일랜드 표시
+    // ── 아일랜드 표시 스위치
 
     private fun onIslandSwitch(on: Boolean) {
-        if (!on) return turnIslandOff()
-        if (IslandController.canDraw(this)) {
-            turnIslandOn()
-        } else {
-            askOverlayPermission()
+        when {
+            !on -> IslandController.disable(this)   // 스위치·화면 갱신은 onIslandChanged가
+            IslandController.canDraw(this) -> turnIslandOn()
+            else -> askOverlayPermission()
         }
     }
 
@@ -302,28 +305,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun turnIslandOff() {
-        prefs.islandOn = false
-        IslandController.hide(this)
-        if (prefs.liveEnabled()) LiveController.refreshUi(this)   // 알림으로 다시 표시
-        else LiveController.stop(this)
-        bindBoard()
-    }
-
     private fun setIslandSwitchSilently(on: Boolean) {
-        if (!::islandSwitch.isInitialized) return
-        islandSwitch.setOnCheckedChangeListener(null)
-        islandSwitch.isChecked = on
-        islandSwitch.setOnCheckedChangeListener { _, checked -> onIslandSwitch(checked) }
+        if (::islandSwitch.isInitialized) islandSwitch.setCheckedSilently(on) { onIslandSwitch(it) }
     }
 
-    /** 리스너를 거치지 않고 스위치 상태만 바꿈 */
-    private fun setSwitchSilently(on: Boolean) {
-        if (!::notifSwitch.isInitialized) return
-        notifSwitch.setOnCheckedChangeListener(null)
-        notifSwitch.isChecked = on
-        notifSwitch.setOnCheckedChangeListener { _, checked -> if (checked) ensurePermissionThenTurnOn() else turnNotificationsOff() }
+    /** 리스너를 거치지 않고 스위치 상태만 바꾼 뒤 [listener]를 다시 붙임 */
+    private fun Switch.setCheckedSilently(on: Boolean, listener: (Boolean) -> Unit) {
+        setOnCheckedChangeListener(null)
+        isChecked = on
+        setOnCheckedChangeListener { _, checked -> listener(checked) }
     }
+
+    private fun setSwitchSilently(on: Boolean) {
+        if (::notifSwitch.isInitialized) notifSwitch.setCheckedSilently(on) { onNotifSwitch(it) }
+    }
+
+    private fun onNotifSwitch(on: Boolean) = if (on) ensurePermissionThenTurnOn() else turnNotificationsOff()
 
     // ── 전광판 배경
 
