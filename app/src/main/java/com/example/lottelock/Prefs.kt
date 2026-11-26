@@ -51,15 +51,14 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("notifications_on", true)
         set(v) = sp.edit { putBoolean("notifications_on", v) }
 
-    /** 경기 중 점수를 알림 대신 화면 위 아일랜드(알약)로 표시 (앱 화면의 스위치) */
+    /**
+     * 아일랜드 표시 (앱 화면의 스위치). 켜 두면 화면 위에 알약이 늘 떠 있고,
+     * 경기가 없으면 최근/오늘 경기를, 경기 중에는 실시간 점수를 보여준다 (경기 중 점수는 알림 대신 아일랜드로).
+     * 알약을 길게 누르거나 스위치를 끄면 꺼진다.
+     */
     var islandOn: Boolean
-        get() = sp.getBoolean("island_on", false)
-        set(v) = sp.edit { putBoolean("island_on", v) }
-
-    /** 사용자가 직접 띄운 아일랜드 (경기와 상관없이 계속 표시, 알약을 길게 누르거나 앱에서 내리면 꺼짐) */
-    var islandPinned: Boolean
-        get() = sp.getBoolean("island_pinned", false)
-        set(v) = sp.edit { putBoolean("island_pinned", v) }
+        get() = sp.getBoolean("island_on", false) || sp.getBoolean("island_pinned", false)
+        set(v) = sp.edit { putBoolean("island_on", v); remove("island_pinned") }
 
     /** 아일랜드를 켰고 '다른 앱 위에 표시' 권한도 있음 */
     fun islandReady(): Boolean = islandOn && IslandController.canDraw(appContext)

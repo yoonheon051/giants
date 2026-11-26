@@ -24,32 +24,41 @@ object IslandController {
 
     fun canDraw(context: Context) = Settings.canDrawOverlays(context)
 
-    fun show(context: Context, game: GameResult) {
+    /** 마지막으로 아일랜드를 띄우지 못한 이유 (앱 화면에서 보여줌), 띄우면 null */
+    @Volatile var lastError: String? = null
+        private set
+
+    fun show(context: Context, game: GameResult?) {
         val app = context.applicationContext
         main.post { showNow(windowContext(app), game) }
     }
 
     /**
      * 실시간 서비스가 경기 점수를 아일랜드로 보여주고 있지 않을 때의 표시:
-     * 사용자가 직접 띄웠으면(고정) 진행 중 > 오늘 예정 > 최근 종료 경기를 보여주고, 아니면 내린다.
+     * 아일랜드를 켰으면 진행 중 > 오늘 예정 > 최근 종료 경기를 보여주고(불러온 경기가 없어도 빈 알약),
+     * 껐으면 내린다.
      */
     fun showIdle(context: Context) {
         val prefs = Prefs(context)
-        val game = if (prefs.islandPinned && canDraw(context)) {
-            runCatching { ScoreUpdater.currentGame(context, includeUpcoming = true) }.getOrNull()
-        } else null
-        if (game != null) show(context, game) else hide(context)
+        if (!prefs.islandOn) return hide(context)
+        if (!canDraw(context)) {
+            lastError = "'다른 앱 위에 표시' 권한이 없습니다"
+            return hide(context)
+        }
+        show(context, runCatching { ScoreUpdater.currentGame(context, includeUpcoming = true) }.getOrNull())
     }
 
-    /** 알약을 길게 누름 → 직접 띄운 아일랜드 내리기 (경기 중 자동 표시는 경기가 끝나면 알아서 내려감) */
+    /** 알약을 길게 누름 → 아일랜드 끄기 (알림도 꺼져 있으면 실시간 갱신도 멈춤) */
     private fun dismiss(ctx: Context) {
-        Prefs(ctx).islandPinned = false
-        if (!LiveScoreService.islandActive) hideNow(ctx)
-        onPinnedChanged?.invoke()
+        val prefs = Prefs(ctx)
+        prefs.islandOn = false
+        hideNow(ctx)
+        if (prefs.liveEnabled()) LiveController.refreshUi(ctx) else LiveController.stop(ctx)
+        onIslandChanged?.invoke()
     }
 
-    /** 앱 화면이 떠 있을 때 '아일랜드 띄우기' 줄을 갱신하려고 */
-    var onPinnedChanged: (() -> Unit)? = null
+    /** 앱 화면이 떠 있을 때 '아일랜드 표시' 스위치를 갱신하려고 */
+    var onIslandChanged: (() -> Unit)? = null
 
     val isShowing: Boolean get() = view != null
 
@@ -58,9 +67,9 @@ object IslandController {
         main.post { hideNow(windowContext(app)) }
     }
 
-    private fun showNow(ctx: Context, game: GameResult) {
+    private fun showNow(ctx: Context, game: GameResult?) {
         view?.let { it.game = game; return }
-        if (!canDraw(ctx)) return
+        if (!canDraw(ctx)) { lastError = "'다른 앱 위에 표시' 권한이 없습니다"; return }
         val v = IslandView(ctx).apply {
             this.game = game
             onOpenApp = { openApp(ctx) }
@@ -82,8 +91,11 @@ object IslandController {
             title = "LotteScoreboardIsland"
         }
         runCatching { ctx.getSystemService(WindowManager::class.java).addView(v, lp) }
-            .onSuccess { view = v }
-            .onFailure { Prefs(ctx).lastStatus = "아일랜드 표시 실패: ${it.message}" }
+            .onSuccess { view = v; lastError = null }
+            .onFailure {
+                lastError = "${it.javaClass.simpleName}: ${it.message}"
+                Prefs(ctx).lastStatus = "아일랜드 표시 실패: $lastError"
+            }
     }
 
     private fun hideNow(ctx: Context) {

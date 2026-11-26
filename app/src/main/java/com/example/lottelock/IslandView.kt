@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
  *  - 원본의 '옆으로 밀어 활동 바꾸기'는 경기 하나만 보여주므로 뺐다
  *
  * 한 번 누르면 펼쳐지고(이닝별 점수), 펼친 상태에서 한 번 더 누르면 [onOpenApp].
- * 바깥을 누르거나 8초 동안 그대로 두면 다시 접힌다. 길게 누르면 [onDismiss] (직접 띄운 아일랜드 내리기).
+ * 바깥을 누르거나 8초 동안 그대로 두면 다시 접힌다. 길게 누르면 [onDismiss] (아일랜드 끄기).
  */
 @SuppressLint("ViewConstructor")
 class IslandView(context: Context) : View(context) {
@@ -182,7 +182,7 @@ class IslandView(context: Context) : View(context) {
             canvas.drawRoundRect(pill, r, r, strokePaint)
             pill.set(0f, 0f, w, h)
         }
-        val g = game ?: return
+        val g = game
 
         clip.reset()
         clip.addRoundRect(pill, r, r, Path.Direction.CW)
@@ -194,8 +194,16 @@ class IslandView(context: Context) : View(context) {
         val inA = ((contentT - 0.22f) / 0.52f).coerceIn(0f, 1f)
         val collapsedA = if (expanded) outA else inA
         val expandedA = if (expanded) inA else outA
-        if (collapsedA > 0f) layer(canvas, cw, collapsedA) { drawCollapsed(it, g) }
-        if (expandedA > 0f) layer(canvas, ew, expandedA) { drawExpanded(it, g) }
+        if (collapsedA > 0f) layer(canvas, cw, collapsedA) {
+            if (g != null) drawCollapsed(it, g) else drawCentered(it, "불러온 경기가 없습니다", cw / 2, ch / 2, 12.5f, semibold, DIM)
+        }
+        if (expandedA > 0f) layer(canvas, ew, expandedA) {
+            if (g != null) drawExpanded(it, g) else {
+                drawCentered(it, "아직 불러온 경기가 없습니다", ew / 2, dp(52f), 14f, semibold, WHITE)
+                drawCentered(it, "앱에서 '결과 불러오기'를 눌러 주세요", ew / 2, dp(76f), 12f, semibold, DIM)
+                drawCentered(it, "한 번 더 누르면 앱 열기", ew / 2, dp(118f), 11f, semibold, HINT)
+            }
+        }
         canvas.restore()
     }
 

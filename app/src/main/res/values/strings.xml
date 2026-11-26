@@ -5,12 +5,8 @@
     <string name="change_team">응원 팀 바꾸기</string>
     <string name="refresh">결과 불러오기</string>
     <string name="row_notification">알림에 스코어보드 표시</string>
-    <string name="row_island">경기 중 아일랜드 표시</string>
-    <string name="row_island_desc">점수를 알림 대신 화면 위 알약으로 · 누르면 펼침</string>
-    <string name="row_island_now">아일랜드 지금 띄우기</string>
-    <string name="row_island_hide">아일랜드 내리기</string>
-    <string name="row_island_now_desc">경기와 상관없이 최근 경기를 표시 · 알약을 길게 누르면 내려감</string>
-    <string name="island_showing">표시 중</string>
+    <string name="row_island">아일랜드 표시</string>
+    <string name="row_island_desc">최근 경기·실시간 점수를 화면 위 알약으로 · 길게 누르면 꺼짐</string>
     <string name="row_background">스코어보드 배경</string>
     <string name="row_notification_settings">휴대폰 알림 설정</string>
     <string name="bg_default">기본</string>

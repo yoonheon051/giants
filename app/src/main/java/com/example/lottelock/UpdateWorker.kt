@@ -30,7 +30,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             ScoreUpdater.refresh(applicationContext, deep = false)
             // 실시간 서비스가 돌고 있으면 알림은 서비스가 관리
             val changed = !LiveScoreService.running && ScoreNotifier.update(applicationContext, force = false)
-            if (!LiveScoreService.running) IslandController.showIdle(applicationContext)   // 직접 띄운 아일랜드도 새 결과로
+            if (!LiveScoreService.running) IslandController.showIdle(applicationContext)   // 떠 있는 아일랜드도 새 결과로
             prefs.lastStatus = "$now 자동 갱신 " + if (changed) "(새 결과)" else "(변경 없음)"
             Result.success()
         } catch (e: IOException) {
