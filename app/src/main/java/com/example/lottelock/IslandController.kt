@@ -29,6 +29,30 @@ object IslandController {
         main.post { showNow(windowContext(app), game) }
     }
 
+    /**
+     * 실시간 서비스가 경기 점수를 아일랜드로 보여주고 있지 않을 때의 표시:
+     * 사용자가 직접 띄웠으면(고정) 진행 중 > 오늘 예정 > 최근 종료 경기를 보여주고, 아니면 내린다.
+     */
+    fun showIdle(context: Context) {
+        val prefs = Prefs(context)
+        val game = if (prefs.islandPinned && canDraw(context)) {
+            runCatching { ScoreUpdater.currentGame(context, includeUpcoming = true) }.getOrNull()
+        } else null
+        if (game != null) show(context, game) else hide(context)
+    }
+
+    /** 알약을 길게 누름 → 직접 띄운 아일랜드 내리기 (경기 중 자동 표시는 경기가 끝나면 알아서 내려감) */
+    private fun dismiss(ctx: Context) {
+        Prefs(ctx).islandPinned = false
+        if (!LiveScoreService.islandActive) hideNow(ctx)
+        onPinnedChanged?.invoke()
+    }
+
+    /** 앱 화면이 떠 있을 때 '아일랜드 띄우기' 줄을 갱신하려고 */
+    var onPinnedChanged: (() -> Unit)? = null
+
+    val isShowing: Boolean get() = view != null
+
     fun hide(context: Context) {
         val app = context.applicationContext
         main.post { hideNow(windowContext(app)) }
@@ -40,6 +64,7 @@ object IslandController {
         val v = IslandView(ctx).apply {
             this.game = game
             onOpenApp = { openApp(ctx) }
+            onDismiss = { dismiss(ctx) }
         }
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,

@@ -43,6 +43,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var teamChip: TextView
     private lateinit var notifSwitch: Switch
     private lateinit var islandSwitch: Switch
+    private lateinit var islandNowLabel: TextView
+    private lateinit var islandNowValue: TextView
+    /** 권한 설정 화면에서 돌아왔을 때 무엇을 하려던 것인지 (true = 지금 띄우기, false = 경기 중 자동 표시) */
+    private var overlayForPin = false
     private lateinit var bgValue: TextView
 
     private val requestNotificationPermission =
@@ -60,9 +64,9 @@ class MainActivity : ComponentActivity() {
     private val requestOverlayPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (IslandController.canDraw(this)) {
-                turnIslandOn()
+                if (overlayForPin) pinIsland() else turnIslandOn()
             } else {
-                setIslandSwitchSilently(false)
+                if (!overlayForPin) setIslandSwitchSilently(false)
                 toast("'다른 앱 위에 표시'를 허용해야 아일랜드를 띄울 수 있습니다.")
             }
         }
@@ -105,6 +109,9 @@ class MainActivity : ComponentActivity() {
         teamChip = findViewById(R.id.teamChip)
         notifSwitch = findViewById(R.id.notifSwitch)
         islandSwitch = findViewById(R.id.islandSwitch)
+        islandNowLabel = findViewById(R.id.islandNowLabel)
+        islandNowValue = findViewById(R.id.islandNowValue)
+        findViewById<View>(R.id.rowIslandNow).setOnClickListener { toggleIslandNow() }
         bgValue = findViewById(R.id.bgValue)
 
         // 응원 팀 선택
@@ -160,6 +167,10 @@ class MainActivity : ComponentActivity() {
         if (notifSwitch.isChecked && !hasNotificationPermission()) setSwitchSilently(false)
         // '다른 앱 위에 표시' 권한을 거둔 경우
         if (islandSwitch.isChecked && !IslandController.canDraw(this)) setIslandSwitchSilently(false)
+        // 직접 띄운 아일랜드: 앱이 종료됐다가 다시 열렸으면 다시 띄우고, 알약을 길게 눌러 내렸으면 줄을 갱신
+        IslandController.onPinnedChanged = { bindIslandNow() }
+        if (!LiveScoreService.islandActive) IslandController.showIdle(this)
+        bindIslandNow()
     }
 
     // ── 응원 팀
@@ -193,6 +204,7 @@ class MainActivity : ComponentActivity() {
         prefs.liveGame = ""
         prefs.upcomingGame = ""
         prefs.lastNotifiedSignature = ""
+        if (!LiveScoreService.islandActive) IslandController.showIdle(this)
         bindTeamChip()
         bindBoard()
         refresh()
@@ -211,6 +223,7 @@ class MainActivity : ComponentActivity() {
                     ScoreNotifier.update(this@MainActivity, force = true)
                 }
             }.onFailure { toast("불러오지 못했습니다: ${it.message}") }
+            if (!LiveScoreService.islandActive) IslandController.showIdle(this@MainActivity)   // 직접 띄운 아일랜드도 새 결과로
             bindBoard()
         }
     }
@@ -264,11 +277,45 @@ class MainActivity : ComponentActivity() {
         if (IslandController.canDraw(this)) {
             turnIslandOn()
         } else {
-            toast("목록에서 이 앱을 찾아 '다른 앱 위에 표시'를 허용해 주세요.")
-            requestOverlayPermission.launch(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-            )
+            askOverlayPermission(forPin = false)
         }
+    }
+
+    private fun askOverlayPermission(forPin: Boolean) {
+        overlayForPin = forPin
+        toast("목록에서 이 앱을 찾아 '다른 앱 위에 표시'를 허용해 주세요.")
+        requestOverlayPermission.launch(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+        )
+    }
+
+    // ── 아일랜드 지금 띄우기 / 내리기 (경기와 상관없이)
+
+    private fun toggleIslandNow() {
+        if (prefs.islandPinned && IslandController.canDraw(this)) {
+            prefs.islandPinned = false
+            if (!LiveScoreService.islandActive) IslandController.hide(this)
+            bindIslandNow()
+            return
+        }
+        if (IslandController.canDraw(this)) pinIsland() else askOverlayPermission(forPin = true)
+    }
+
+    private fun pinIsland() {
+        if (ScoreUpdater.currentGame(this, includeUpcoming = true) == null) {
+            toast("먼저 '결과 불러오기'를 누르세요.")
+            return
+        }
+        prefs.islandPinned = true
+        if (!LiveScoreService.islandActive) IslandController.showIdle(this)
+        toast("아일랜드를 띄웠습니다. 누르면 펼쳐지고, 길게 누르면 내려갑니다.")
+        bindIslandNow()
+    }
+
+    private fun bindIslandNow() {
+        val on = prefs.islandPinned && IslandController.canDraw(this)
+        islandNowLabel.setText(if (on) R.string.row_island_hide else R.string.row_island_now)
+        islandNowValue.text = if (on) getString(R.string.island_showing) else ""
     }
 
     private fun turnIslandOn() {

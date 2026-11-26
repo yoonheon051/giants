@@ -330,6 +330,65 @@
                 android:layout_height="1dp"
                 android:background="@color/divider" />
 
+            <!-- 경기와 상관없이 지금 아일랜드 띄우기 / 내리기 -->
+            <LinearLayout
+                android:id="@+id/rowIslandNow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:minHeight="64dp"
+                android:orientation="horizontal"
+                android:paddingStart="18dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="18dp"
+                android:paddingBottom="8dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/islandNowLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/row_island_now"
+                        android:textColor="#FF111827"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/row_island_now_desc"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/islandNowValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/divider" />
+
             <LinearLayout
                 android:id="@+id/rowBackground"
                 android:layout_width="match_parent"

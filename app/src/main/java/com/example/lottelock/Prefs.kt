@@ -56,6 +56,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("island_on", false)
         set(v) = sp.edit { putBoolean("island_on", v) }
 
+    /** 사용자가 직접 띄운 아일랜드 (경기와 상관없이 계속 표시, 알약을 길게 누르거나 앱에서 내리면 꺼짐) */
+    var islandPinned: Boolean
+        get() = sp.getBoolean("island_pinned", false)
+        set(v) = sp.edit { putBoolean("island_pinned", v) }
+
     /** 아일랜드를 켰고 '다른 앱 위에 표시' 권한도 있음 */
     fun islandReady(): Boolean = islandOn && IslandController.canDraw(appContext)
 

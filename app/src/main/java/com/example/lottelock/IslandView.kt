@@ -13,8 +13,10 @@ import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.TypedValue
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import java.time.Instant
@@ -31,12 +33,20 @@ import kotlin.math.roundToInt
  *  - 원본의 '옆으로 밀어 활동 바꾸기'는 경기 하나만 보여주므로 뺐다
  *
  * 한 번 누르면 펼쳐지고(이닝별 점수), 펼친 상태에서 한 번 더 누르면 [onOpenApp].
- * 바깥을 누르거나 8초 동안 그대로 두면 다시 접힌다.
+ * 바깥을 누르거나 8초 동안 그대로 두면 다시 접힌다. 길게 누르면 [onDismiss] (직접 띄운 아일랜드 내리기).
  */
 @SuppressLint("ViewConstructor")
 class IslandView(context: Context) : View(context) {
 
     var onOpenApp: () -> Unit = {}
+    var onDismiss: () -> Unit = {}
+    private var longPressed = false
+    private val longPress = Runnable {
+        longPressed = true
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        pressScale(1f, 450L, releaseCurve)
+        onDismiss()
+    }
 
     var game: GameResult? = null
         set(v) {
@@ -121,12 +131,18 @@ class IslandView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_OUTSIDE -> { if (expanded) setExpanded(false); return false }
-            MotionEvent.ACTION_DOWN -> pressScale(0.965f, 120L, null)
+            MotionEvent.ACTION_DOWN -> {
+                longPressed = false
+                postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
+                pressScale(0.965f, 120L, null)
+            }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(longPress)
+                if (longPressed) return true
                 pressScale(1f, 450L, releaseCurve)
                 if (event.x in 0f..width.toFloat() && event.y in 0f..height.toFloat()) performClick()
             }
-            MotionEvent.ACTION_CANCEL -> pressScale(1f, 450L, releaseCurve)
+            MotionEvent.ACTION_CANCEL -> { removeCallbacks(longPress); pressScale(1f, 450L, releaseCurve) }
         }
         return true
     }
@@ -148,6 +164,7 @@ class IslandView(context: Context) : View(context) {
 
     override fun onDetachedFromWindow() {
         removeCallbacks(collapseLater)
+        removeCallbacks(longPress)
         animator?.cancel()
         super.onDetachedFromWindow()
     }

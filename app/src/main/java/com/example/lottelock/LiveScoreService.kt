@@ -181,11 +181,11 @@ class LiveScoreService : Service() {
         shownAsIsland = island
         islandActive = island
         return if (island) {
-            if (game != null) IslandController.show(this, game) else IslandController.hide(this)
+            if (game != null) IslandController.show(this, game) else IslandController.showIdle(this)
             ScoreNotifier.notifyIslandService(this, game, note, force = switched)
             true
         } else {
-            IslandController.hide(this)
+            IslandController.showIdle(this)   // 직접 띄운 아일랜드가 있으면 그대로 (진행 중 경기로 갱신)
             ScoreNotifier.update(this, force = switched, note = note)
         }
     }
@@ -200,8 +200,8 @@ class LiveScoreService : Service() {
         // 경기 종료·중지 버튼·시간 제한 등 어떤 이유로 끝나든:
         // 아일랜드를 내리고, 알림을 서비스에서 떼어 남겨두고(DETACH), 최종/최근 경기 내용으로 다시 올린다.
         islandActive = false
-        IslandController.hide(this)
         prefs.liveGame = ""
+        IslandController.showIdle(this)   // 직접 띄운 아일랜드면 최근 경기로 남기고, 아니면 내림
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
         if (!ScoreNotifier.update(this, force = true)) ScoreNotifier.cancel(this)
         running = false
