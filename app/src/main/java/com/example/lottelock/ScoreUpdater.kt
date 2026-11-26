@@ -60,7 +60,7 @@ object ScoreUpdater {
 
         val todayMsg = when {
             today0 == null -> ""
-            !prefs.notificationsOn -> ""   // 알림을 끄면 실시간 갱신도 하지 않음
+            !prefs.liveEnabled() -> ""   // 알림과 아일랜드를 모두 끄면 실시간 갱신도 하지 않음
             today0.isLive -> {
                 LiveController.startFromBackground(context)
                 " · 오늘 경기 진행 중 → 실시간 갱신 시작"

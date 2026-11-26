@@ -28,6 +28,8 @@ object ScoreNotifier {
     const val CHANNEL_ID = "scoreboard_v2"
     private const val OLD_CHANNEL_ID = "scoreboard"
     const val NOTIFICATION_ID = 1
+    /** 아일랜드로 점수를 보여주는 동안 쓰는 조용한 채널 (포그라운드 서비스는 알림이 꼭 있어야 해서) */
+    const val SERVICE_CHANNEL_ID = "live_service"
 
     private const val TRACKED_COLOR = 0xFFE8344E.toInt()            // 밝은/어두운 알림 테마 모두에서 보이는 롯데 레드
     private const val TRACKED_COLOR_ON_IMAGE = 0xFFFF5C73.toInt()   // 앱 배경 사진 위에서 더 잘 보이는 밝은 레드
@@ -64,6 +66,15 @@ object ScoreNotifier {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannel(channel)
+        // 중요도 '최소': 알림창 아래 '무음 알림' 구역에 접혀 들어가고 잠금화면·상태표시줄에는 나오지 않음
+        nm.createNotificationChannel(
+            NotificationChannel(SERVICE_CHANNEL_ID, "실시간 갱신 상태 (아일랜드 사용 중)", NotificationManager.IMPORTANCE_MIN).apply {
+                description = "경기 중 점수를 아일랜드로 보여줄 때 시스템이 요구하는 알림"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            }
+        )
     }
 
     fun canNotify(context: Context): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
@@ -75,16 +86,45 @@ object ScoreNotifier {
     fun summary(game: GameResult, note: String? = null): String =
         listOfNotNull(statusText(game), date(game), game.stadium, note).joinToString(" · ")
 
+    private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
+        context, 0,
+        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /** 아일랜드 사용 중 실시간 서비스의 알림: 조용한 채널에 한 줄 요약만 */
+    fun buildIslandService(context: Context, game: GameResult?, note: String? = null): Notification {
+        ensureChannel(context)
+        return NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_score)
+            .setContentIntent(openApp(context))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setContentTitle(game?.let { title(it) } ?: "실시간 갱신 중")
+            .setContentText(listOfNotNull(game?.let { statusText(it) }, note, "점수는 화면 위 아일랜드에 표시").joinToString(" · "))
+            .build()
+    }
+
+    private var lastIslandServiceText = ""
+
+    /** 아일랜드 사용 중 서비스 알림을 내용이 바뀌었을 때만 고침 */
+    @SuppressLint("MissingPermission")
+    fun notifyIslandService(context: Context, game: GameResult?, note: String?, force: Boolean = false) {
+        val key = listOf(game?.scoreLine, game?.liveLabel, game?.state, note).joinToString("|")
+        if (!force && key == lastIslandServiceText) return
+        lastIslandServiceText = key
+        runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, buildIslandService(context, game, note)) }
+    }
+
     fun build(context: Context, game: GameResult?, note: String? = null): Notification {
         ensureChannel(context)
-        val open = PendingIntent.getActivity(
-            context, 0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
         val b = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_score)
-            .setContentIntent(open)
+            .setContentIntent(openApp(context))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -155,6 +195,7 @@ object ScoreNotifier {
      */
     @SuppressLint("MissingPermission")   // canNotify()로 확인
     fun update(context: Context, force: Boolean, note: String? = null): Boolean {
+        if (LiveScoreService.islandActive) return false   // 경기 중 점수는 아일랜드가 보여줌 (알림 대신)
         val prefs = Prefs(context)
         if (!prefs.notificationsOn) return false   // 앱 화면에서 알림 표시를 끔
         val game = ScoreUpdater.currentGame(context) ?: return false

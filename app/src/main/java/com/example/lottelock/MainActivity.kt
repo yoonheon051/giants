@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var boardScrim: View
     private lateinit var teamChip: TextView
     private lateinit var notifSwitch: Switch
+    private lateinit var islandSwitch: Switch
     private lateinit var bgValue: TextView
 
     private val requestNotificationPermission =
@@ -52,6 +53,17 @@ class MainActivity : ComponentActivity() {
                 setSwitchSilently(false)
                 prefs.notificationsOn = false
                 toast("알림 권한이 없어 스코어보드를 표시할 수 없습니다. '휴대폰 알림 설정'에서 허용해 주세요.")
+            }
+        }
+
+    /** '다른 앱 위에 표시' 설정 화면에서 돌아옴 → 허용했으면 아일랜드 켜기 (결과 코드는 믿을 수 없어 권한을 직접 확인) */
+    private val requestOverlayPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (IslandController.canDraw(this)) {
+                turnIslandOn()
+            } else {
+                setIslandSwitchSilently(false)
+                toast("'다른 앱 위에 표시'를 허용해야 아일랜드를 띄울 수 있습니다.")
             }
         }
 
@@ -92,6 +104,7 @@ class MainActivity : ComponentActivity() {
         boardScrim = findViewById(R.id.boardScrim)
         teamChip = findViewById(R.id.teamChip)
         notifSwitch = findViewById(R.id.notifSwitch)
+        islandSwitch = findViewById(R.id.islandSwitch)
         bgValue = findViewById(R.id.bgValue)
 
         // 응원 팀 선택
@@ -99,7 +112,7 @@ class MainActivity : ComponentActivity() {
 
         // 숨은 기능: 제목을 길게 누르면 데모 경기 (테스트용)
         findViewById<TextView>(R.id.appTitle).setOnLongClickListener {
-            if (hasNotificationPermission()) {
+            if (hasNotificationPermission() || prefs.islandReady()) {
                 LiveController.startNow(this, demo = true)
                 toast("데모 경기 시작: 20초마다 반 이닝씩 진행됩니다.")
             } else {
@@ -113,6 +126,9 @@ class MainActivity : ComponentActivity() {
         // 알림에 스코어보드 표시
         setSwitchSilently(prefs.notificationsOn && hasNotificationPermission())
         notifSwitch.setOnCheckedChangeListener { _, on -> if (on) ensurePermissionThenTurnOn() else turnNotificationsOff() }
+
+        // 경기 중 아일랜드 표시
+        setIslandSwitchSilently(prefs.islandReady())
 
         findViewById<View>(R.id.rowBackground).setOnClickListener { showBackgroundMenu() }
         findViewById<View>(R.id.rowNotifSettings).setOnClickListener {
@@ -142,6 +158,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // 휴대폰 설정에서 알림 권한을 바꾸고 돌아온 경우 반영
         if (notifSwitch.isChecked && !hasNotificationPermission()) setSwitchSilently(false)
+        // '다른 앱 위에 표시' 권한을 거둔 경우
+        if (islandSwitch.isChecked && !IslandController.canDraw(this)) setIslandSwitchSilently(false)
     }
 
     // ── 응원 팀
@@ -199,7 +217,7 @@ class MainActivity : ComponentActivity() {
 
     private fun bindBoard() {
         val game = runCatching { ScoreUpdater.currentGame(this, includeUpcoming = true) }.getOrNull()
-        board.bind(game, prefs.team, prefs.notificationsOn, prefs.lastRefreshAt)
+        board.bind(game, prefs.team, prefs.liveEnabled(), prefs.lastRefreshAt)
     }
 
     // ── 알림 표시 스위치
@@ -221,15 +239,63 @@ class MainActivity : ComponentActivity() {
             return
         }
         prefs.lastNotifiedSignature = ""
-        if (!ScoreNotifier.update(this, force = true)) toast("먼저 '결과 불러오기'를 누르세요.")
+        // 경기 중 아일랜드가 점수를 보여주는 동안에는 알림을 건드리지 않음 (경기가 끝나면 최종 스코어가 알림에 남음)
+        if (!LiveScoreService.islandActive && !ScoreNotifier.update(this, force = true)) toast("먼저 '결과 불러오기'를 누르세요.")
         bindBoard()
     }
 
     private fun turnNotificationsOff() {
         prefs.notificationsOn = false
-        LiveController.stop(this)   // 돌고 있는 서비스와 예약된 시작 알람 모두
-        ScoreNotifier.cancel(this)
+        if (prefs.liveEnabled()) {
+            // 아일랜드는 켜져 있음 → 실시간 갱신은 계속 (아일랜드가 점수를 보여줌)
+            if (!LiveScoreService.islandActive) ScoreNotifier.cancel(this)
+            LiveController.refreshUi(this)
+        } else {
+            LiveController.stop(this)   // 돌고 있는 서비스와 예약된 시작 알람 모두
+            ScoreNotifier.cancel(this)
+        }
         bindBoard()
+    }
+
+    // ── 경기 중 아일랜드 표시
+
+    private fun onIslandSwitch(on: Boolean) {
+        if (!on) return turnIslandOff()
+        if (IslandController.canDraw(this)) {
+            turnIslandOn()
+        } else {
+            toast("목록에서 이 앱을 찾아 '다른 앱 위에 표시'를 허용해 주세요.")
+            requestOverlayPermission.launch(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+            )
+        }
+    }
+
+    private fun turnIslandOn() {
+        val wasLive = prefs.liveEnabled()
+        prefs.islandOn = true
+        setIslandSwitchSilently(true)
+        if (LiveScoreService.running) {
+            LiveController.refreshUi(this)
+        } else if (!wasLive) {
+            refresh()   // 그동안 실시간 갱신이 꺼져 있었으므로 오늘 경기를 다시 확인해 예약
+        }
+        toast("경기 중에는 점수가 화면 위 아일랜드로 표시됩니다. 제목을 길게 누르면 데모로 확인할 수 있습니다.")
+        bindBoard()
+    }
+
+    private fun turnIslandOff() {
+        prefs.islandOn = false
+        if (prefs.liveEnabled()) LiveController.refreshUi(this)   // 알림으로 다시 표시
+        else LiveController.stop(this)
+        bindBoard()
+    }
+
+    private fun setIslandSwitchSilently(on: Boolean) {
+        if (!::islandSwitch.isInitialized) return
+        islandSwitch.setOnCheckedChangeListener(null)
+        islandSwitch.isChecked = on
+        islandSwitch.setOnCheckedChangeListener { _, checked -> onIslandSwitch(checked) }
     }
 
     /** 리스너를 거치지 않고 스위치 상태만 바꿈 */

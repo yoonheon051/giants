@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!-- 경기 중 점수 아일랜드 (다른 앱 위에 표시: 사용자가 설정에서 직접 허용) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- 경기 시작 시각에 정확히 깨어나기 (Android 13+: 자동 허용 / 12: 기본 허용) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission

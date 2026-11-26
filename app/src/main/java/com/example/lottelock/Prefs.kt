@@ -14,6 +14,7 @@ enum class TeamChoice(val code: String, val category: String) {
 }
 
 class Prefs(context: Context) {
+    private val appContext: Context = context.applicationContext
     private val sp = context.getSharedPreferences("lotte_lock", Context.MODE_PRIVATE)
 
     /** 앱 화면 스코어보드 카드 뒤에 깔 배경 사진 (사용자가 고른 이미지를 줄여서 복사해 둠). 없으면 기본 배경 */
@@ -45,10 +46,21 @@ class Prefs(context: Context) {
         get() = sp.getString("upcoming_game", "").orEmpty()
         set(v) = sp.edit { putString("upcoming_game", v) }
 
-    /** 알림에 스코어보드 표시 (앱 화면의 스위치). 끄면 알림과 실시간 갱신을 하지 않음 */
+    /** 알림에 스코어보드 표시 (앱 화면의 스위치). 끄면 알림을 띄우지 않고, 아일랜드도 꺼져 있으면 실시간 갱신도 하지 않음 */
     var notificationsOn: Boolean
         get() = sp.getBoolean("notifications_on", true)
         set(v) = sp.edit { putBoolean("notifications_on", v) }
+
+    /** 경기 중 점수를 알림 대신 화면 위 아일랜드(알약)로 표시 (앱 화면의 스위치) */
+    var islandOn: Boolean
+        get() = sp.getBoolean("island_on", false)
+        set(v) = sp.edit { putBoolean("island_on", v) }
+
+    /** 아일랜드를 켰고 '다른 앱 위에 표시' 권한도 있음 */
+    fun islandReady(): Boolean = islandOn && IslandController.canDraw(appContext)
+
+    /** 실시간 갱신을 할지: 알림이나 아일랜드 중 하나라도 켜져 있으면 */
+    fun liveEnabled(): Boolean = notificationsOn || islandReady()
 
     /** 마지막으로 결과를 불러온 시각 (epoch ms, 0 = 없음) */
     var lastRefreshAt: Long

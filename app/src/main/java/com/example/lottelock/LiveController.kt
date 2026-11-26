@@ -24,6 +24,14 @@ object LiveController {
         )
     }
 
+    /** 돌고 있는 실시간 서비스에 표시 방식(아일랜드/알림)을 다시 적용하라고 알림. 안 돌고 있으면 아무것도 안 함 */
+    fun refreshUi(context: Context) {
+        if (!LiveScoreService.running) return
+        runCatching {
+            context.startService(Intent(context, LiveScoreService::class.java).putExtra(LiveScoreService.EXTRA_REFRESH_UI, true))
+        }
+    }
+
     /** 백그라운드에서 시작: 1초 뒤 알람 → 리시버 → 서비스 */
     fun startFromBackground(context: Context) = scheduleStart(context, System.currentTimeMillis() + 1_000)
 
@@ -61,8 +69,8 @@ object LiveController {
 
 class GameStartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // 알람을 예약한 뒤 '알림에 스코어보드 표시'를 껐으면 시작하지 않는다 (끄면 실시간 갱신도 안 하기로 했으므로)
-        if (!Prefs(context).notificationsOn) return
+        // 알람을 예약한 뒤 알림과 아일랜드를 모두 껐으면 시작하지 않는다 (둘 다 끄면 실시간 갱신도 안 하기로 했으므로)
+        if (!Prefs(context).liveEnabled()) return
         runCatching { LiveController.startNow(context) }
             .onFailure { Prefs(context).lastStatus = "실시간 갱신 시작 실패: ${it.message}" }
     }
